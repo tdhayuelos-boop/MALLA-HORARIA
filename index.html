@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Malla horaria</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="top">
+  <h1>Malla horaria</h1>
+  <nav class="tabs" id="tabs">
+    <button data-tab="malla" class="on">Malla</button>
+    <button data-tab="nomina">Nómina</button>
+    <button data-tab="registro">Registro</button>
+  </nav>
+  <span class="spacer"></span>
+  <span class="badge" id="modeBadge"></span>
+  <button id="btnStaff">Personal</button>
+  <button id="btnShifts">Turnos</button>
+  <button id="btnUser" class="userchip" title="Mi cuenta"></button>
+</header>
+
+<div class="bar" id="periodBar">
+  <button id="prev" title="Mes anterior">◀</button>
+  <select id="selMonth" title="Mes"></select>
+  <input type="number" id="selYear" min="2000" max="2100" title="Año">
+  <button id="next" title="Mes siguiente">▶</button>
+  <input type="date" id="dayPick" title="Ir a un día">
+  <div id="holidays" class="holidays"></div>
+</div>
+
+<main>
+  <!-- ============== MALLA ============== -->
+  <div id="tab-malla">
+    <section class="card">
+      <h2>Registro de entradas y salidas</h2>
+      <div id="mainGrid"></div>
+      <div class="legend">
+        <span>Escribe la hora y presiona Enter o Tab. Entrada <b>8</b> → 08:00 · Salida <b>8</b> → 20:00 (también <b>8:30</b> o <b>830</b>).</span>
+        <span>Códigos: <b>C</b> compensatorio · <b>D</b> descanso · <b>F</b> festivo · <b>INV</b> inventario · <b>INC</b> incapacidad · <b>VAC</b> vacaciones · <b>AUS</b> ausencia · <b>LIC</b> licencia</span>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Turnos del día y contador de horas</h2>
+      <div id="shiftGrid"></div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--ok)"></i>Turno habitual</span>
+        <span><i class="sw" style="background:var(--adj);box-shadow:inset 0 0 0 1px var(--adj-b)"></i>Con horas fuera del turno (contador)</span>
+        <span><i class="sw" style="background:#fff;border:1px solid var(--bad)"></i>Sin turno: horas en rojo</span>
+        <span>Haz clic en una celda para ver el horario real y cómo se clasificó.</span>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============== NÓMINA ============== -->
+  <div id="tab-nomina" hidden>
+    <section class="card">
+      <div class="row-between">
+        <h2>Nómina del mes</h2>
+        <button id="btnPayXlsx" class="primary">Descargar Excel del mes</button>
+      </div>
+      <p class="muted small">Q1 = días 1 al 15 · Q2 = días 16 al fin de mes (15 días cada una) · Mes = 30 días. Las horas de domingos y festivos se clasifican por separado en cada quincena y en el mes completo.</p>
+    </section>
+    <div id="payCards"></div>
+  </div>
+
+  <!-- ============== REGISTRO ============== -->
+  <div id="tab-registro" hidden>
+    <section class="card">
+      <div class="row-between">
+        <h2>Registro de movimientos</h2>
+        <button id="btnLogXlsx" class="primary">Descargar Excel</button>
+      </div>
+      <div class="filters">
+        <label>Desde <input type="date" id="fFrom"></label>
+        <label>Hasta <input type="date" id="fTo"></label>
+        <label>Persona <select id="fEmp"></select></label>
+        <label>Usuario <select id="fUser"></select></label>
+        <label>Tipo <select id="fType"></select></label>
+        <label class="grow">Buscar <input type="search" id="fText" placeholder="texto, comentario, hora…"></label>
+        <button id="fAll">Ver todo</button>
+      </div>
+      <div class="muted small" id="logCount"></div>
+      <div id="console" class="console"></div>
+    </section>
+  </div>
+</main>
+
+<!-- Ingreso -->
+<div class="login" id="login" hidden>
+  <form class="login-box" id="loginForm" autocomplete="off">
+    <h2>Malla horaria</h2>
+    <p class="muted" id="loginHint">Escribe tu código para entrar.</p>
+    <label class="fl">Código<input id="lgCode" inputmode="numeric" autocomplete="off"></label>
+    <label class="fl" id="lgNameRow" hidden>Tu nombre<input id="lgName" autocomplete="off"></label>
+    <label class="fl" id="lgPassRow" hidden>Clave<input id="lgPass" type="password" autocomplete="off"></label>
+    <label class="fl" id="lgPass2Row" hidden>Repite la clave<input id="lgPass2" type="password" autocomplete="off"></label>
+    <div class="err" id="lgErr"></div>
+    <button class="primary wide" id="lgGo" type="submit">Continuar</button>
+  </form>
+</div>
+
+<!-- Ventanas -->
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="config.js"></script>
+<script src="js/core.js"></script>
+<script src="js/db.js"></script>
+<script src="js/app.js"></script>
+<script src="js/pay.js"></script>
+</body>
+</html>
