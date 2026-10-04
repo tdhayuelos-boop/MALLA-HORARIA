@@ -54,6 +54,16 @@ Código + clave. Con un código nuevo pide nombre y clave y crea el usuario. El 
 ### Nómina
 Por persona: **Q1** (1–15), **Q2** (16–fin) y **Mes**. Días (15 / 15 / 30 menos INC, VAC, AUS, LIC), contadores de INC/VAC/AUS/LIC, HFC, HF, HRN, HRND&F, HEND&F, HEN y HEF. Debajo, el **saldo de horas**, que pasa solo de un mes al siguiente.
 
+### Saldo de horas con semáforo
+En la malla, la última columna muestra el saldo de horas de cada persona (saldo anterior + contador de la malla + ajustes − descansos dobles descontados) con color: **verde** hasta 4 h, **amarillo** más de 4 y hasta 7 h, **rojo** más de 7 h o saldo negativo. Pasa el mouse por encima para ver el desglose.
+
+### Comentario de nómina (mensual)
+Cada persona tiene un comentario armado solo, con este formato: `DOM: 6-20-27 // FEST: 12 // 8 HRN - 2 HEN INV O. AMERICAS 21SEP`
+- **DOM:** días de los domingos trabajados. **FEST:** días de los festivos trabajados (un domingo festivo va en FEST).
+- Horas del mes por tipo: HRN, HRND&F, HEND&F, HEN y HEF (solo las que haya).
+- **INV:** tienda y fecha del primer INV de cada pareja. Al escribir el segundo INV la página pregunta la tienda; se puede cambiar con "Cambiar tienda".
+- Botón "Copiar comentario"; también va en la hoja "Comentarios" del Excel de nómina.
+
 ### Horas manuales
 Un recuadro por persona, positivas o negativas, siempre con motivo. Un negativo que coincida con un positivo anterior pregunta si lo anula (y pide el motivo de la anulación). Van al mismo contador de horas.
 

@@ -284,7 +284,7 @@ function cellView(en) {
 function renderShifts() {
   const emps = visibleEmployees();
   if (!emps.length) { $('#shiftGrid').innerHTML = ''; return; }
-  let html = `<table><thead><tr><th class="name">Persona</th>${headCells()}<th>Contador del mes</th></tr></thead><tbody>`;
+  let html = `<table><thead><tr><th class="name">Persona</th>${headCells()}<th>Saldo de horas</th></tr></thead><tbody>`;
   for (const emp of emps) {
     html += `<tr><td class="name">${esc(emp.name)}</td>`;
     for (let d = 1; d <= C.daysInMonth(S.y, S.m); d++) {
@@ -298,14 +298,19 @@ function renderShifts() {
 function updateTotals() {
   const from = monthFrom(), to = monthTo();
   for (const emp of visibleEmployees()) {
-    let worked = 0, counter = 0;
+    let worked = 0;
     for (const en of empEntries(emp.id)) {
       if (en.date < from || en.date > to || !en.calc || !en.start || !en.end || en.code) continue;
-      worked += en.calc.wk; counter += en.calc.counter;
+      worked += en.calc.wk;
     }
     const t = $('#tot-' + emp.id), x = $('#ext-' + emp.id);
     if (t) t.textContent = C.fmtDur(worked);
-    if (x) { x.textContent = counter ? signed(counter) : '0 h'; x.className = 'extra ' + (counter > 0 ? 'pos' : counter < 0 ? 'neg' : ''); }
+    if (x && A.balanceFor) {
+      const b = A.balanceFor(emp.id), z = v => (v ? signed(v) : '0 h');
+      x.className = 'extra sem-' + C.semaforo(b.total);
+      x.innerHTML = `<b>${esc(z(b.total))}</b><small>mes ${esc(z(b.mallaM))}</small>`;
+      x.title = `Saldo anterior: ${z(b.prevTotal)}\nContador de la malla (mes): ${z(b.mallaM)}\nDescanso doble descontado: ${z(b.discM)}\nHoras manuales del mes: ${z(b.adjM)}`;
+    }
   }
 }
 function renderAll() {
@@ -452,6 +457,9 @@ async function processCell(empId, date) {
 
   /* 3. Borrar la celda */
   if (isEmpty) {
+    const pairs0 = C.invPairs(empEntries(empId).filter(e => e.code === 'INV' && e.date !== date).map(e => e.date).sort());
+    S.decisions.filter(d => d.emp === empId && d.kind === 'inventario_tienda' && !pairs0.includes(d.ref)
+      && !dropDec.some(x => x.kind === d.kind && x.ref === d.ref)).forEach(d => dropDec.push(d));
     const id = await logRow({ action: 'BORRADO', emp: empId, empName: emp.name, refDate: date, before: describeEntry(prev), after: '', comment: pol.comment, annuls: prev && prev.logId, detail });
     await DB.removeEntry(empId, date); S.entries.delete(key(empId, date));
     await applyDecisions(); await logNotices();
@@ -511,6 +519,32 @@ async function processCell(empId, date) {
     }
     addDec.push({ emp: empId, kind: 'doble_descanso', ref: res.candidate, value: { minutes: C.DAY_MIN } });
     notices.push(`Doble descanso: se descuentan 7 h pendientes por el D del ${fd(res.candidate)}`);
+  }
+
+  /* 5b. Inventario: al formarse la pareja de INV se pregunta la tienda */
+  {
+    const invDates = new Set(empEntries(empId).filter(e => e.code === 'INV' && e.date !== date).map(e => e.date));
+    if (code === 'INV') invDates.add(date);
+    const pairsNow = C.invPairs([...invDates].sort());
+    S.decisions.filter(d => d.emp === empId && d.kind === 'inventario_tienda' && !pairsNow.includes(d.ref)
+      && !dropDec.some(x => x.kind === d.kind && x.ref === d.ref)).forEach(d => dropDec.push(d));
+    if (code === 'INV') {
+      for (const first of pairsNow) {
+        if (first !== date && first !== C.addDays(date, -1)) continue;
+        if (S.decisions.some(d => d.emp === empId && d.kind === 'inventario_tienda' && d.ref === first)) continue;
+        const last = [...S.decisions].reverse().find(d => d.kind === 'inventario_tienda');
+        const r = await promptForm({
+          title: 'Inventario detectado',
+          body: `${esc(emp.name)} tiene dos INV seguidos (${esc(fd(first))} y ${esc(fd(C.addDays(first, 1)))}). ¿En qué tienda es el inventario?`,
+          fields: [{ id: 'store', label: 'Tienda', required: true, value: last && last.value ? last.value.store : '', placeholder: 'Ej. O. AMERICAS' }],
+          okLabel: 'Guardar tienda',
+        });
+        if (!r) return revert();
+        const store = r.store.toUpperCase();
+        addDec.push({ emp: empId, kind: 'inventario_tienda', ref: first, value: { store } });
+        notices.push(`Inventario del ${fd(first)}: tienda ${store}`);
+      }
+    }
   }
 
   /* 6. Turno y clasificación de horas */
@@ -747,6 +781,7 @@ function switchTab(name) {
   S.tab = name;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
   ['malla', 'nomina', 'registro'].forEach(t => { $('#tab-' + t).hidden = t !== name; });
+  if (name === 'malla') updateTotals();
   if (name === 'nomina' && A.renderNomina) A.renderNomina();
   if (name === 'registro' && A.openLogTab) A.openLogTab();
 }

@@ -289,6 +289,46 @@ function summarize(list, from, to, base) {
   return r;
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Semáforo del saldo de horas                                         */
+/* negativo o más de 7 h: rojo · más de 4 h: amarillo · hasta 4 h: verde */
+/* ------------------------------------------------------------------ */
+function semaforo(min) {
+  if (min < 0 || min > 7 * 60) return 'red';
+  if (min > 4 * 60) return 'yellow';
+  return 'green';
+}
+
+/* ------------------------------------------------------------------ */
+/* Comentario de nómina (mensual)                                      */
+/* DOM: 6-20-27 // FEST: 12 // 8 HRN - 2 HEN INV O. AMERICAS 21SEP     */
+/* ------------------------------------------------------------------ */
+const MON3 = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+const fmtInvDate = s => `${+s.slice(8)}${MON3[+s.slice(5, 7) - 1]}`;
+/* Fecha de la primera de cada pareja de INV dentro del periodo */
+function invPairDates(list, from, to) {
+  return invPairs(list.filter(e => e.code === 'INV').map(e => e.date).sort()).filter(d => d >= from && d <= to);
+}
+function buildComment(list, from, to, sum, stores) {
+  const dom = [], fest = [];
+  list.forEach(e => {
+    if (e.date < from || e.date > to || e.code || !e.start || !e.end || !e.calc) return;
+    if (isHoliday(e.date)) fest.push(+e.date.slice(8));            // domingo y festivo a la vez = festivo
+    else if (dow(e.date) === 0) dom.push(+e.date.slice(8));
+  });
+  dom.sort((a, b) => a - b); fest.sort((a, b) => a - b);
+  const segs = [];
+  if (dom.length) segs.push('DOM: ' + dom.join('-'));
+  if (fest.length) segs.push('FEST: ' + fest.join('-'));
+  const hrs = ['HRN', 'HRND&F', 'HEND&F', 'HEN', 'HEF'].filter(k => sum[k])
+    .map(k => `${String(hoursDec(sum[k])).replace('.', ',')} ${k}`).join(' - ');
+  const inv = invPairDates(list, from, to).map(d => `INV ${(stores && stores[d]) || '(falta la tienda)'} ${fmtInvDate(d)}`).join(' - ');
+  const tail = [hrs, inv].filter(Boolean).join(' ');
+  if (tail) segs.push(tail);
+  return segs.join(' // ') || 'Sin novedades';
+}
+
 const api = {
   LUNCH, NIGHT, CLOSE_FROM, DAY_MIN, EDIT_FREE_MS, CODES, NONWORK,
   ymd, parseDate, addDays, dow, weekStart, daysInMonth, monthOf,
@@ -296,6 +336,7 @@ const api = {
   parseTime, toMin, fmtDur, hoursDec, parseHours, parseCode,
   classify, pay, describeExtra, suggestCierre, invPairs,
   weekEvents, sundayWorked, restFlow, closingDeadline, editPolicy, summarize,
+  semaforo, fmtInvDate, invPairDates, buildComment,
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.MH_CORE = api;

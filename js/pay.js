@@ -54,12 +54,39 @@ function adjustmentsOfMonth(empId) {
   const per = C.monthOf(A.monthFrom());
   return S.adjustments.filter(a => a.emp === empId && a.period === per);
 }
+function storesOf(empId) {
+  const out = {};
+  S.decisions.filter(d => d.emp === empId && d.kind === 'inventario_tienda').forEach(d => { out[d.ref] = d.value && d.value.store; });
+  return out;
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (x) { /* sin portapapeles */ } ta.remove(); }
+  toast('Comentario copiado.');
+}
+async function changeStore(empId, first) {
+  const emp = S.employees.find(e => e.id === empId);
+  const cur = S.decisions.find(d => d.emp === empId && d.kind === 'inventario_tienda' && d.ref === first);
+  const r = await promptForm({
+    title: 'Tienda del inventario', body: `${esc(emp.name)} · inventario del ${esc(fd(first))}`,
+    fields: [{ id: 'store', label: 'Tienda', required: true, value: cur && cur.value ? cur.value.store : '' }],
+  });
+  if (!r) return;
+  const store = r.store.toUpperCase();
+  await DB.saveDecision({ emp: empId, kind: 'inventario_tienda', ref: first, value: { store }, by: S.user.code });
+  await A.logRow({ action: 'AVISO', emp: empId, empName: emp.name, refDate: first, before: cur && cur.value ? cur.value.store : '', after: `Tienda del inventario: ${store}` });
+  S.decisions = await DB.decisions();
+  renderNomina();
+}
 function renderNomina() {
   const emps = A.visibleEmployees(), ps = periods();
   if (!emps.length) { $('#payCards').innerHTML = '<div class="card empty">No hay personal.</div>'; return; }
   const cancelled = new Set(S.adjustments.filter(a => a.cancels).map(a => a.cancels));
   $('#payCards').innerHTML = emps.map(emp => {
     const pr = payrollFor(emp.id), b = balanceFor(emp.id);
+    const eList = A.empEntries(emp.id), stores = storesOf(emp.id);
+    const cmt = C.buildComment(eList, A.monthFrom(), A.monthTo(), pr.m, stores);
+    const invHtml = C.invPairDates(eList, A.monthFrom(), A.monthTo()).map(d => `<div class="invlist"><div class="it"><span>Inventario del ${esc(fd(d))}: <b>${esc(stores[d] || '(falta la tienda)')}</b></span><button data-invstore="${emp.id}|${d}">Cambiar tienda</button></div></div>`).join('');
     const head = `<tr><th>Concepto</th>${ps.map(p => `<th>${p.label}${p.sub ? `<small> ${p.sub}</small>` : ''}</th>`).join('')}</tr>`;
     const body = ROWS.map(r => {
       if (r.length === 1) return `<tr class="sep"><td colspan="4">${esc(r[0])}</td></tr>`;
@@ -82,8 +109,12 @@ function renderNomina() {
             <div class="ln"><span>Contador de la malla este mes</span><b class="${sgn(b.mallaM)}">${b.mallaM ? esc(signed(b.mallaM)) : '0 h'}</b></div>
             <div class="ln"><span>Descanso doble descontado${b.discCount ? ` (${b.discCount} × 7 h)` : ''}</span><b class="${sgn(b.discM)}">${b.discM ? esc(signed(b.discM)) : '0 h'}</b></div>
             <div class="ln"><span>Horas manuales del mes</span><b class="${sgn(b.adjM)}">${b.adjM ? esc(signed(b.adjM)) : '0 h'}</b></div>
-            <div class="ln total"><span>Saldo de horas</span><b class="${sgn(b.total)}">${b.total ? esc(signed(b.total)) : '0 h'}</b></div>
+            <div class="ln total sem-${C.semaforo(b.total)}"><span><i class="sem-dot sem-${C.semaforo(b.total)}"></i>Saldo de horas</span><b>${b.total ? esc(signed(b.total)) : '0 h'}</b></div>
           </div>
+          <label class="fl">Comentario de nómina (mes)</label>
+          <div class="cmtbox" id="cmt-${emp.id}">${esc(cmt)}</div>
+          <div class="cmtrow"><button data-copy="${emp.id}">Copiar comentario</button></div>
+          ${invHtml}
           <label class="fl">Horas manuales (positivas o negativas)</label>
           <div class="adjform"><input id="adj-${emp.id}" placeholder="Ej. 2, -1,5 o 1:30" data-adjin="${emp.id}"><button class="primary" data-adj="${emp.id}">Agregar</button></div>
           <div class="adjlist">${adjHtml}</div>
@@ -93,6 +124,10 @@ function renderNomina() {
   }).join('');
 }
 $('#payCards').addEventListener('click', e => {
+  const cp = e.target.closest('[data-copy]');
+  if (cp) { copyText(document.getElementById('cmt-' + cp.dataset.copy).textContent); return; }
+  const st = e.target.closest('[data-invstore]');
+  if (st) { const [emp, first] = st.dataset.invstore.split('|'); A.enqueue(() => changeStore(emp, first)); return; }
   const b = e.target.closest('[data-adj]'); if (!b) return;
   A.enqueue(() => addAdjustment(b.dataset.adj));
 });
@@ -271,6 +306,10 @@ async function exportPayroll() {
     });
   });
   addSheet(wb, 'Nómina', ['Persona', 'Concepto', 'Q1 (1–15)', `Q2 (16–${C.daysInMonth(S.y, S.m)})`, 'Mes'], rows, [22, 42, 14, 14, 14]);
+
+  /* Comentario de nómina */
+  const cm = emps.map(emp => [emp.name, C.buildComment(A.empEntries(emp.id), A.monthFrom(), A.monthTo(), payrollFor(emp.id).m, storesOf(emp.id))]);
+  addSheet(wb, 'Comentarios', ['Persona', 'Comentario de nómina (mes)'], cm, [22, 90]);
 
   /* Detalle diario */
   const det = [];
