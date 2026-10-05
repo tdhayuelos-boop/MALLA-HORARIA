@@ -169,3 +169,29 @@ td.extra.sem-red{background:#fee2e2;color:#b91c1c}
 #mainGrid.selecting{user-select:none;cursor:cell}
 #mainGrid.selecting input{pointer-events:none}
 .console .t-IMAGEN{color:#7c3aed}
+
+/* BASE */
+td.code-base{background:#fef3c7} td.code-base input{color:#92400e;font-weight:700}
+td.s.code.c-BASE{background:#fef3c7;color:#92400e}
+
+/* la malla se ajusta al ancho de la pantalla (sin deslizar) en pantallas de computador */
+@media (min-width:1000px){
+  #mainGrid table,#shiftGrid table{width:100%;table-layout:fixed}
+  #mainGrid th,#mainGrid td,#shiftGrid th,#shiftGrid td{min-width:0}
+  #mainGrid th.name,#mainGrid td.name,#shiftGrid th.name,#shiftGrid td.name{width:110px;min-width:110px;max-width:110px;font-size:12px;overflow:hidden;text-overflow:ellipsis}
+  #mainGrid td.lbl{width:50px;font-size:10px}
+  #mainGrid td.total,#mainGrid thead th:last-child{width:70px;font-size:11px}
+  #shiftGrid td.extra,#shiftGrid thead th:last-child{width:84px;min-width:0;font-size:11px}
+  #mainGrid thead th,#shiftGrid thead th{font-size:11px}
+  #mainGrid td input{font-size:11px;padding:0;min-width:0}
+  #shiftGrid td.s{font-size:8px;overflow:hidden;word-break:break-word;letter-spacing:0}
+  #shiftGrid td.s.code{font-size:8px}
+  #shiftGrid td.s.adj small{font-size:8px}
+}
+
+/* firma */
+footer.sign{text-align:center;padding:18px 0 22px}
+.jmcs{position:relative;display:inline-block;font-size:11px;font-weight:700;letter-spacing:2px;color:#9ca3af;cursor:default}
+.jmcs:hover,.jmcs:focus{color:var(--brand);outline:none}
+.jmcs::after{content:attr(data-tip);position:absolute;bottom:130%;left:50%;transform:translateX(-50%);white-space:nowrap;background:#1d2330;color:#fff;font-size:12px;font-weight:400;letter-spacing:0;padding:6px 10px;border-radius:6px;opacity:0;pointer-events:none;transition:opacity .15s}
+.jmcs:hover::after,.jmcs:focus::after{opacity:1}
