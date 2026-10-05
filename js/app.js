@@ -309,12 +309,14 @@ function updateTotals() {
       const b = A.balanceFor(emp.id), z = v => (v ? signed(v) : '0 h');
       x.className = 'extra sem-' + C.semaforo(b.total);
       x.innerHTML = `<b>${esc(z(b.total))}</b><small>mes ${esc(z(b.mallaM))}</small>`;
+      const chip = $('#adjsal-' + emp.id);
+      if (chip) { chip.className = 'adjsal sem-' + C.semaforo(b.total); chip.innerHTML = `<i class="sem-dot sem-${C.semaforo(b.total)}"></i>Saldo de horas: <b>${esc(z(b.total))}</b>`; }
       x.title = `Saldo anterior: ${z(b.prevTotal)}\nContador de la malla (mes): ${z(b.mallaM)}\nDescanso doble descontado: ${z(b.discM)}\nHoras manuales del mes: ${z(b.adjM)}`;
     }
   }
 }
 function renderAll() {
-  renderBar(); renderMain(); renderShifts(); updateTotals();
+  renderBar(); renderMain(); renderShifts(); if (A.renderAdjust) A.renderAdjust(); updateTotals();
   if (S.tab === 'nomina' && A.renderNomina) A.renderNomina();
   if (S.tab === 'registro' && A.refreshLogFilters) A.refreshLogFilters();
   if (S.hl) {

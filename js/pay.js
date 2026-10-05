@@ -81,7 +81,6 @@ async function changeStore(empId, first) {
 function renderNomina() {
   const emps = A.visibleEmployees(), ps = periods();
   if (!emps.length) { $('#payCards').innerHTML = '<div class="card empty">No hay personal.</div>'; return; }
-  const cancelled = new Set(S.adjustments.filter(a => a.cancels).map(a => a.cancels));
   $('#payCards').innerHTML = emps.map(emp => {
     const pr = payrollFor(emp.id), b = balanceFor(emp.id);
     const eList = A.empEntries(emp.id), stores = storesOf(emp.id);
@@ -92,32 +91,16 @@ function renderNomina() {
       if (r.length === 1) return `<tr class="sep"><td colspan="4">${esc(r[0])}</td></tr>`;
       return `<tr><td>${esc(r[0])}</td>${ps.map(p => { const v = pr[p.id][r[1]]; const t = cellTxt(r[2], v); return `<td class="num ${t === '—' ? 'zero' : ''}">${t}</td>`; }).join('')}</tr>`;
     }).join('');
-    const adjs = adjustmentsOfMonth(emp.id);
-    const adjHtml = adjs.length ? adjs.map(a => {
-      const off = a.kind === 'ajuste' && cancelled.has(a.id);
-      const when = new Date(a.ts).toLocaleString('es-CO');
-      return `<div class="it ${off ? 'off' : ''}"><span><b class="${sgn(a.minutes)}">${esc(signed(a.minutes))}</b> · ${esc(a.reason)}${a.kind === 'anulacion' ? ' <span class="tag">ANULACIÓN</span>' : ''}${off ? ' <span class="tag">ANULADO</span>' : ''}</span><span class="muted">${esc(a.userName || a.userCode || '')} · ${esc(when)}</span></div>`;
-    }).join('') : '<div class="muted small">Sin ajustes este mes.</div>';
     return `
     <section class="card paycard">
       <h2>${esc(emp.name)}</h2>
       <div class="paygrid">
         <table class="pay"><thead>${head}</thead><tbody>${body}</tbody></table>
         <div>
-          <div class="saldo">
-            <div class="ln"><span>Saldo anterior</span><b class="${sgn(b.prevTotal)}">${b.prevTotal ? esc(signed(b.prevTotal)) : '0 h'}</b></div>
-            <div class="ln"><span>Contador de la malla este mes</span><b class="${sgn(b.mallaM)}">${b.mallaM ? esc(signed(b.mallaM)) : '0 h'}</b></div>
-            <div class="ln"><span>Descanso doble descontado${b.discCount ? ` (${b.discCount} × 7 h)` : ''}</span><b class="${sgn(b.discM)}">${b.discM ? esc(signed(b.discM)) : '0 h'}</b></div>
-            <div class="ln"><span>Horas manuales del mes</span><b class="${sgn(b.adjM)}">${b.adjM ? esc(signed(b.adjM)) : '0 h'}</b></div>
-            <div class="ln total sem-${C.semaforo(b.total)}"><span><i class="sem-dot sem-${C.semaforo(b.total)}"></i>Saldo de horas</span><b>${b.total ? esc(signed(b.total)) : '0 h'}</b></div>
-          </div>
           <label class="fl">Comentario de nómina (mes)</label>
           <div class="cmtbox" id="cmt-${emp.id}">${esc(cmt)}</div>
           <div class="cmtrow"><button data-copy="${emp.id}">Copiar comentario</button></div>
           ${invHtml}
-          <label class="fl">Horas manuales (positivas o negativas)</label>
-          <div class="adjform"><input id="adj-${emp.id}" placeholder="Ej. 2, -1,5 o 1:30" data-adjin="${emp.id}"><button class="primary" data-adj="${emp.id}">Agregar</button></div>
-          <div class="adjlist">${adjHtml}</div>
         </div>
       </div>
     </section>`;
@@ -128,15 +111,40 @@ $('#payCards').addEventListener('click', e => {
   if (cp) { copyText(document.getElementById('cmt-' + cp.dataset.copy).textContent); return; }
   const st = e.target.closest('[data-invstore]');
   if (st) { const [emp, first] = st.dataset.invstore.split('|'); A.enqueue(() => changeStore(emp, first)); return; }
+});
+
+/* ------------------------------------------------------------------ */
+/* Horas manuales (en la pantalla inicial, debajo de la malla)         */
+/* ------------------------------------------------------------------ */
+function renderAdjust() {
+  const emps = A.visibleEmployees();
+  if (!emps.length) { $('#adjBox').innerHTML = '<div class="empty">No hay personal.</div>'; return; }
+  const cancelled = new Set(S.adjustments.filter(a => a.cancels).map(a => a.cancels));
+  $('#adjBox').innerHTML = emps.map(emp => {
+    const adjs = adjustmentsOfMonth(emp.id);
+    const list = adjs.length ? adjs.map(a => {
+      const off = a.kind === 'ajuste' && cancelled.has(a.id);
+      const when = new Date(a.ts).toLocaleString('es-CO');
+      return `<div class="it ${off ? 'off' : ''}"><span><b class="${sgn(a.minutes)}">${esc(signed(a.minutes))}</b> · ${esc(a.reason)}${a.kind === 'anulacion' ? ' <span class="tag">ANULACIÓN</span>' : ''}${off ? ' <span class="tag">ANULADO</span>' : ''}</span><span class="muted">${esc(a.userName || a.userCode || '')} · ${esc(when)}</span></div>`;
+    }).join('') : '<div class="muted small">Sin ajustes este mes.</div>';
+    return `
+    <div class="adjperson">
+      <div class="adjhead"><b>${esc(emp.name)}</b><span class="adjsal" id="adjsal-${emp.id}"></span></div>
+      <div class="adjform"><input id="adj-${emp.id}" placeholder="Horas: 2, -1,5 o 1:30" data-adjin="${emp.id}"><button class="primary" data-adj="${emp.id}">Agregar</button></div>
+      <div class="adjlist">${list}</div>
+    </div>`;
+  }).join('');
+}
+$('#adjBox').addEventListener('click', e => {
   const b = e.target.closest('[data-adj]'); if (!b) return;
   A.enqueue(() => addAdjustment(b.dataset.adj));
 });
-$('#payCards').addEventListener('keydown', e => {
+$('#adjBox').addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.dataset && e.target.dataset.adjin) { e.preventDefault(); A.enqueue(() => addAdjustment(e.target.dataset.adjin)); }
 });
 
 /* ------------------------------------------------------------------ */
-/* Horas manuales                                                      */
+/* Alta de horas manuales                                                */
 /* ------------------------------------------------------------------ */
 async function addAdjustment(empId) {
   const input = document.getElementById('adj-' + empId);
@@ -192,7 +200,8 @@ async function addAdjustment(empId) {
     before: '', after: signed(mins), comment: reason, detail: { periodo: per, cancela: cancels, ajuste: row.id },
   });
   S.adjustments = await DB.adjustments();
-  renderNomina();
+  renderAdjust(); A.updateTotals();
+  if (S.tab === 'nomina') renderNomina();
 }
 
 /* ------------------------------------------------------------------ */
@@ -378,5 +387,5 @@ async function exportLog() {
 $('#btnPayXlsx').addEventListener('click', () => A.enqueue(exportPayroll));
 $('#btnLogXlsx').addEventListener('click', () => A.enqueue(exportLog));
 
-Object.assign(A, { renderNomina, openLogTab, refreshLogFilters: loadLog, payrollFor, balanceFor });
+Object.assign(A, { renderNomina, renderAdjust, openLogTab, refreshLogFilters: loadLog, payrollFor, balanceFor });
 })();
