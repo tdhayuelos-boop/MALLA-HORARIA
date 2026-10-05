@@ -113,7 +113,10 @@ function parseHours(raw) {
 const CODES = {
   C: 'COMPENSATORIO', D: 'DESCANSO', F: 'FESTIVO', INV: 'INVENTARIO',
   INC: 'INCAPACIDAD', VAC: 'VACACIONES', AUS: 'AUSENCIA', LIC: 'LICENCIA',
+  BASE: 'TURNO BASE',
 };
+/* Los únicos códigos que se pueden escribir ahora (los demás solo se leen si ya existían) */
+const INPUT_CODES = ['C', 'D', 'BASE'];
 const NONWORK = ['INC', 'VAC', 'AUS', 'LIC'];
 function parseCode(raw) {
   const c = String(raw == null ? '' : raw).trim().toUpperCase();
@@ -259,7 +262,7 @@ function editPolicy(prev, dateStr, now) {
 /* ------------------------------------------------------------------ */
 function summarize(list, from, to, base) {
   const r = {
-    days: base, INC: 0, VAC: 0, AUS: 0, LIC: 0, C: 0, D: 0, F: 0, invDays: 0, invPairs: 0,
+    days: base, BASE: 0, INC: 0, VAC: 0, AUS: 0, LIC: 0, C: 0, D: 0, F: 0, invDays: 0, invPairs: 0,
     sfDays: 0, sfMin: 0, HFC: 0, HF: 0, HRN: 0, 'HRND&F': 0, 'HEND&F': 0, HEN: 0, HEF: 0,
     workedDays: 0, workedMin: 0, counter: 0, net: 0,
   };
@@ -324,13 +327,15 @@ function buildComment(list, from, to, sum, stores) {
   const hrs = ['HRN', 'HRND&F', 'HEND&F', 'HEN', 'HEF'].filter(k => sum[k])
     .map(k => `${String(hoursDec(sum[k])).replace('.', ',')} ${k}`).join(' - ');
   const inv = invPairDates(list, from, to).map(d => `INV ${(stores && stores[d]) || '(falta la tienda)'} ${fmtInvDate(d)}`).join(' - ');
-  const tail = [hrs, inv].filter(Boolean).join(' ');
+  const bases = list.filter(e => e.code === 'BASE' && e.date >= from && e.date <= to && e.calc && e.calc.nota)
+    .sort((a, b) => (a.date < b.date ? -1 : 1)).map(e => `BASE ${fmtInvDate(e.date)}: ${e.calc.nota}`).join(' - ');
+  const tail = [hrs, inv, bases].filter(Boolean).join(' ');
   if (tail) segs.push(tail);
   return segs.join(' // ') || 'Sin novedades';
 }
 
 const api = {
-  LUNCH, NIGHT, CLOSE_FROM, DAY_MIN, EDIT_FREE_MS, CODES, NONWORK,
+  LUNCH, NIGHT, CLOSE_FROM, DAY_MIN, EDIT_FREE_MS, CODES, INPUT_CODES, NONWORK,
   ymd, parseDate, addDays, dow, weekStart, daysInMonth, monthOf,
   easter, holidays, holidayName, isHoliday, isSunFest, monthHolidays,
   parseTime, toMin, fmtDur, hoursDec, parseHours, parseCode,

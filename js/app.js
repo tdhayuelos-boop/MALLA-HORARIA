@@ -13,10 +13,20 @@ const DIAS = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
 const DIAS_L = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const key = (e, d) => e + '|' + d;
 const DEFAULT_SHIFTS = [
+  { code: 'CIERRE 1', start: '11:00', end: '19:00' },
   { code: 'APERTURA 2', start: '10:00', end: '18:00' },
   { code: 'APERTURA 3', start: '11:00', end: '19:00' },
-  { code: 'CIERRE 2', start: '12:00', end: '20:00' },
   { code: 'CIERRE 3', start: '13:00', end: '21:00' },
+  { code: 'CIERRE 2', start: '12:00', end: '20:00' },
+  { code: 'VISUAL 2', start: '09:00', end: '17:00' },
+  { code: 'VISUAL 1', start: '08:00', end: '16:00' },
+  { code: 'APERTURA 4', start: '09:30', end: '17:30' },
+  { code: 'CIERRE 4', start: '14:00', end: '22:00' },
+  { code: 'CIERRE 5', start: '15:00', end: '23:00' },
+  { code: 'INVENTARIO 2', start: '07:00', end: '15:00' },
+  { code: 'INVENTARIO 1', start: '06:00', end: '14:00' },
+  { code: 'CIERRE 6', start: '16:00', end: '23:59' },
+  { code: 'INVENTARIO 3', start: '19:00', end: '03:00' },
 ];
 
 const S = {
@@ -168,7 +178,7 @@ async function logRow(r) {
 A.logRow = logRow;
 function describeEntry(en) {
   if (!en) return '';
-  if (en.code) return `${en.code} · ${C.CODES[en.code]}`;
+  if (en.code) return `${en.code} · ${C.CODES[en.code]}${en.code === 'BASE' && en.calc && en.calc.nota ? ' · ' + en.calc.nota : ''}`;
   if (!en.start && !en.end) return '';
   if (!en.start || !en.end) return `${en.start || '?'}–${en.end || '?'} (incompleto)`;
   let s = `${en.start}–${en.end}`;
@@ -244,7 +254,7 @@ const dcls = date => {
   const dw = C.dow(date);
   return (C.isHoliday(date) ? 'fest ' : dw === 0 ? 'sun ' : '') + (S.hl && date === C.ymd(S.y, S.m, S.hl) ? 'hl' : '');
 };
-const codeCls = code => (['C', 'D', 'F'].includes(code) ? 'code-rest' : ['INC', 'LIC', 'AUS', 'VAC'].includes(code) ? 'code-leave' : code === 'INV' ? 'code-inv' : '');
+const codeCls = code => (['C', 'D', 'F'].includes(code) ? 'code-rest' : ['INC', 'LIC', 'AUS', 'VAC'].includes(code) ? 'code-leave' : code === 'INV' ? 'code-inv' : code === 'BASE' ? 'code-base' : '');
 function headCells() {
   let h = '';
   for (let d = 1; d <= C.daysInMonth(S.y, S.m); d++) {
@@ -265,7 +275,7 @@ function renderMain() {
       for (let d = 1; d <= C.daysInMonth(S.y, S.m); d++) {
         const date = C.ymd(S.y, S.m, d), en = S.entries.get(key(emp.id, date));
         const v = en ? (en.code || (k === 's' ? en.start : en.end)) : '';
-        html += `<td class="${dcls(date)} ${en ? codeCls(en.code) : ''}"><input data-e="${emp.id}" data-d="${date}" data-k="${k}" value="${esc(v || '')}" autocomplete="off"></td>`;
+        html += `<td class="${dcls(date)} ${en ? codeCls(en.code) : ''}" ${noteTitle(en)}><input data-e="${emp.id}" data-d="${date}" data-k="${k}" value="${esc(v || '')}" autocomplete="off"></td>`;
       }
       if (k === 's') html += `<td class="total" rowspan="2" id="tot-${emp.id}"></td>`;
       html += '</tr>';
@@ -273,6 +283,7 @@ function renderMain() {
   }
   $('#mainGrid').innerHTML = html + '</tbody></table>';
 }
+const noteTitle = en => (en && en.code === 'BASE' && en.calc && en.calc.nota ? `title="${esc('Novedad: ' + en.calc.nota)}"` : '');
 function cellView(en) {
   if (!en || (!en.code && !en.start && !en.end)) return { cls: '', html: '' };
   if (en.code) return { cls: 'code c-' + en.code, html: esc(C.CODES[en.code]) };
@@ -289,7 +300,7 @@ function renderShifts() {
     html += `<tr><td class="name">${esc(emp.name)}</td>`;
     for (let d = 1; d <= C.daysInMonth(S.y, S.m); d++) {
       const date = C.ymd(S.y, S.m, d), c = cellView(S.entries.get(key(emp.id, date)));
-      html += `<td class="s ${c.cls} ${dcls(date)}" data-e="${emp.id}" data-d="${date}">${c.html}</td>`;
+      html += `<td class="s ${c.cls} ${dcls(date)}" data-e="${emp.id}" data-d="${date}" ${noteTitle(S.entries.get(key(emp.id, date)))}>${c.html}</td>`;
     }
     html += `<td class="extra" id="ext-${emp.id}"></td></tr>`;
   }
@@ -417,7 +428,7 @@ async function processCell(empId, date) {
   const sIn = q('s'), eIn = q('e');
   const paint = en => {
     const td = sIn && sIn.parentElement, td2 = eIn && eIn.parentElement;
-    [td, td2].forEach(t => { if (t) t.className = dcls(date) + ' ' + (en ? codeCls(en.code) : ''); });
+    [td, td2].forEach(t => { if (t) { t.className = dcls(date) + ' ' + (en ? codeCls(en.code) : ''); const n = en && en.code === 'BASE' && en.calc && en.calc.nota; if (n) t.title = 'Novedad: ' + n; else t.removeAttribute('title'); } });
   };
   const setInputs = en => { if (sIn) sIn.value = en ? (en.code || en.start || '') : ''; if (eIn) eIn.value = en ? (en.code || en.end || '') : ''; paint(en); };
   const revert = () => setInputs(prev);
@@ -430,9 +441,10 @@ async function processCell(empId, date) {
   if (c1 || c2) {
     if (c1 && c2 && c1 !== c2) { toast('Los dos recuadros tienen códigos distintos.'); return revert(); }
     code = c1 || c2;
+    if (!C.INPUT_CODES.includes(code)) { toast('Ese código ya no se usa. Escribe C, D o BASE.'); return revert(); }
   } else {
     st = C.parseTime(rawS, 's'); en = C.parseTime(rawE, 'e');
-    if (st === null || en === null) { toast('Hora no válida. Ejemplos: 8, 8:30, 1430 o un código (C, D, F, INV, INC, VAC, AUS, LIC).'); return revert(); }
+    if (st === null || en === null) { toast('Hora no válida. Ejemplos: 8, 8:30, 1430 o un código (C, D o BASE).'); return revert(); }
     if (st && en && C.toMin(en) <= C.toMin(st)) { toast('La salida debe ser después de la entrada.'); return revert(); }
   }
   const isEmpty = !code && !st && !en;
@@ -549,8 +561,19 @@ async function processCell(empId, date) {
     }
   }
 
-  /* 6. Turno y clasificación de horas */
+  /* 5c. BASE: se pregunta la novedad y queda guardada en la celda */
   let shift = null, calc = null;
+  if (code === 'BASE') {
+    const f = await promptForm({
+      title: 'Novedad del turno BASE', body: `${esc(emp.name)} · ${esc(fdl(date))}<br>¿Qué novedad tiene este día? (incapacidad, vacaciones, licencia, ausencia…)`,
+      fields: [{ id: 'nota', label: 'Novedad', type: 'textarea', required: true, value: prev && prev.code === 'BASE' && prev.calc ? prev.calc.nota : '' }],
+    });
+    if (!f) return revert();
+    calc = { nota: f.nota.trim() };
+    notices.push(`Novedad BASE: ${calc.nota}`);
+  }
+
+  /* 6. Turno y clasificación de horas */
   if (!code && st && en) {
     const sunFest = C.isSunFest(date);
     const exact = S.shifts.find(x => x.start === st && x.end === en);
@@ -612,7 +635,7 @@ async function showDetail(empId, date) {
   const tipo = C.holidayName(date) ? `Festivo (${esc(C.holidayName(date))})` : C.dow(date) === 0 ? 'Domingo' : 'Día normal';
   let rows, buttons = [{ label: 'Cerrar', value: 'x', cls: 'primary' }];
   if (en.code) {
-    rows = `<b>Código</b><span>${esc(en.code)} · ${esc(C.CODES[en.code])}</span><b>Tipo de día</b><span>${tipo}</span>`;
+    rows = `<b>Código</b><span>${esc(en.code)} · ${esc(C.CODES[en.code])}</span><b>Tipo de día</b><span>${tipo}</span>${en.code === 'BASE' && en.calc && en.calc.nota ? `<b>Novedad</b><span>${esc(en.calc.nota)}</span>` : ''}`;
   } else if (!en.start || !en.end) {
     rows = `<b>Estado</b><span>Incompleto: falta ${en.start ? 'la salida' : 'la entrada'}</span>`;
   } else {
