@@ -35,7 +35,10 @@
   <!-- ============== MALLA ============== -->
   <div id="tab-malla">
     <section class="card">
-      <h2>Registro de entradas y salidas</h2>
+      <div class="row-between">
+        <h2>Registro de entradas y salidas</h2>
+        <div><span id="selInfo" class="muted small"></span> <button id="btnShareImg">Generar y compartir imagen de malla</button></div>
+      </div>
       <div id="mainGrid"></div>
       <div class="legend">
         <span>Escribe la hora y presiona Enter o Tab. Entrada <b>8</b> → 08:00 · Salida <b>8</b> → 20:00 (también <b>8:30</b> o <b>830</b>).</span>
@@ -51,6 +54,11 @@
         <span><i class="sw" style="background:#fff;border:1px solid var(--bad)"></i>Sin turno: horas en rojo</span>
         <span>Haz clic en una celda para ver el horario real y cómo se clasificó.</span>
       </div>
+    </section>
+    <section class="card">
+      <h2>Horas manuales</h2>
+      <p class="muted small">Suma o resta horas que la malla no muestra (positivas o negativas). Siempre piden un motivo y van al mismo saldo de horas.</p>
+      <div id="adjBox"></div>
     </section>
   </div>
 
@@ -113,5 +121,6 @@
 <script src="js/db.js"></script>
 <script src="js/app.js"></script>
 <script src="js/pay.js"></script>
+<script src="js/share.js"></script>
 </body>
 </html>

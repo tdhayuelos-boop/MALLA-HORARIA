@@ -153,3 +153,19 @@ td.extra.sem-red{background:#fee2e2;color:#b91c1c}
 .cmtrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
 .invlist{display:grid;gap:4px;font-size:12px;margin-bottom:10px}
 .invlist .it{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:4px 8px;background:#f8fafc;border-radius:8px}
+
+/* horas manuales en la pantalla inicial */
+#adjBox{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:6px}
+.adjperson{border:1px solid var(--line);border-radius:10px;padding:10px}
+.adjhead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.adjsal{padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600}
+.adjsal.sem-green{background:#dcfce7;color:#166534}
+.adjsal.sem-yellow{background:#fef3c7;color:#92400e}
+.adjsal.sem-red{background:#fee2e2;color:#b91c1c}
+
+/* selección tipo Excel */
+#mainGrid td.selc{background:#bfdbfe !important;outline:1px solid #2563eb;outline-offset:-1px}
+#mainGrid td.selc input{background:transparent}
+#mainGrid.selecting{user-select:none;cursor:cell}
+#mainGrid.selecting input{pointer-events:none}
+.console .t-IMAGEN{color:#7c3aed}
