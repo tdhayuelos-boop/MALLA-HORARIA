@@ -195,3 +195,7 @@ footer.sign{text-align:center;padding:18px 0 22px}
 .jmcs:hover,.jmcs:focus{color:var(--brand);outline:none}
 .jmcs::after{content:attr(data-tip);position:absolute;bottom:130%;left:50%;transform:translateX(-50%);white-space:nowrap;background:#1d2330;color:#fff;font-size:12px;font-weight:400;letter-spacing:0;padding:6px 10px;border-radius:6px;opacity:0;pointer-events:none;transition:opacity .15s}
 .jmcs:hover::after,.jmcs:focus::after{opacity:1}
+
+#shiftGrid td.selc{background:#bfdbfe !important;outline:1px solid #2563eb;outline-offset:-1px}
+#shiftGrid.selecting{user-select:none;cursor:cell}
+#shiftGrid td.s{user-select:none}
