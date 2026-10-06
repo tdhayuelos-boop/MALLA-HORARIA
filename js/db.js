@@ -93,13 +93,13 @@ const DB = {
 
   /* ---------- turnos ---------- */
   async shifts() {
-    if (useSB) { const { data, error } = await sb.from('shifts').select('*').order('sort'); if (error) fail(error); return data.map(s => ({ code: s.code, start: s.start_time, end: s.end_time })); }
+    if (useSB) { const { data, error } = await sb.from('shifts').select('*').order('sort'); if (error) fail(error); return data.map(s => ({ code: s.code, start: s.start_time, end: s.end_time, lunch: s.lunch !== false })); }
     return load().shifts || null;
   },
   async saveShifts(list) {
     if (useSB) {
       let r = await sb.from('shifts').delete().neq('code', '__none__'); if (r.error) fail(r.error);
-      if (list.length) { r = await sb.from('shifts').insert(list.map((s, i) => ({ code: s.code, start_time: s.start, end_time: s.end, sort: i }))); if (r.error) fail(r.error); }
+      if (list.length) { r = await sb.from('shifts').insert(list.map((s, i) => ({ code: s.code, start_time: s.start, end_time: s.end, lunch: s.lunch !== false, sort: i }))); if (r.error) fail(r.error); }
       return;
     }
     const d = load(); d.shifts = list; save(d);

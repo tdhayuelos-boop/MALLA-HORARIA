@@ -645,7 +645,7 @@ async function showDetail(empId, date) {
       <b>Horario real</b><span>${en.start} – ${en.end}</span>
       <b>Tipo de día</b><span>${tipo}</span>
       <b>Turno</b><span>${en.shift ? esc(en.shift) + (sh ? ` (${sh.start}–${sh.end})` : '') : '<span style="color:var(--bad)">Sin frase</span>'}</span>
-      <b>Trabajadas</b><span>${esc(C.fmtDur(c.wk))} (${en.start}–${en.end} menos 1 h de almuerzo)</span>
+      <b>Trabajadas</b><span>${esc(C.fmtDur(c.wk))} (${c.lunch === 0 ? `${en.start}–${en.end}, sin almuerzo` : `${en.start}–${en.end} menos 1 h de almuerzo`})</span>
       <b>Fuera del turno</b><span>${esc(C.describeExtra(c))}</span>
       <b>Contador de horas</b><span>${c.counter ? esc(signed(c.counter)) : '0 h'}</span>
       <b>En la nómina</b><span>${paylist}${c.sf ? ` · jornada dom/festivo ${esc(C.fmtDur(c.tw))}` : ''}</span>`;
@@ -728,29 +728,33 @@ function openShifts(draft) {
       <input value="${esc(s.code)}" data-f="code" data-i="${i}" style="flex:2">
       <input value="${esc(s.start)}" data-f="start" data-i="${i}" style="flex:1" placeholder="10:00">
       <input value="${esc(s.end)}" data-f="end" data-i="${i}" style="flex:1" placeholder="18:00">
+      <label class="small" style="white-space:nowrap" title="Si está marcado, a este turno se le descuenta 1 hora de almuerzo"><input type="checkbox" data-lunch="${i}" ${s.lunch === false ? '' : 'checked'}> Almuerzo</label>
       <button class="danger" data-del="${i}">✕</button>
     </div>`).join('');
   showOverlay(`
     <h3>Turnos habilitados</h3>
-    <div class="mbody">Nombre, entrada y salida (24 h). Cuando un horario coincide con uno de estos, la malla de abajo muestra su nombre. Los cambios aplican de aquí en adelante; lo ya registrado no se recalcula.</div>
+    <div class="mbody">Nombre, entrada y salida (24 h) y si ese turno lleva almuerzo (1 h que se descuenta). Cuando un horario coincide con uno de estos, la malla de abajo muestra su nombre. Los cambios aplican de aquí en adelante; lo ya registrado no se recalcula.</div>
     ${rows}
     <div class="row"><button id="addShift">+ Agregar turno</button></div>
     <div class="foot"><button id="cls">Cancelar</button><button class="primary" id="save">Guardar</button></div>`);
   cancelHandler = hideOverlay;
-  const sync = () => $('#modal').querySelectorAll('input[data-f]').forEach(i => { draft[i.dataset.i][i.dataset.f] = i.value; });
+  const sync = () => {
+    $('#modal').querySelectorAll('input[data-f]').forEach(i => { draft[i.dataset.i][i.dataset.f] = i.value; });
+    $('#modal').querySelectorAll('input[data-lunch]').forEach(i => { draft[i.dataset.lunch].lunch = i.checked; });
+  };
   $('#cls').onclick = hideOverlay;
-  $('#addShift').onclick = () => { sync(); draft.push({ code: 'NUEVO', start: '09:00', end: '17:00' }); openShifts(draft); };
+  $('#addShift').onclick = () => { sync(); draft.push({ code: 'NUEVO', start: '09:00', end: '17:00', lunch: true }); openShifts(draft); };
   $('#modal').querySelectorAll('[data-del]').forEach(b => { b.onclick = () => { sync(); draft.splice(+b.dataset.del, 1); openShifts(draft); }; });
   $('#save').onclick = async () => {
     sync();
     const clean = [];
     for (const s of draft) {
       const a = C.parseTime(s.start, 's'), b = C.parseTime(s.end, 's');
-      if (!s.code.trim() || !a || !b || C.toMin(b) <= C.toMin(a)) { toast('Revisa los turnos: nombre y horas válidas (la salida después de la entrada).'); return; }
-      clean.push({ code: s.code.trim().toUpperCase(), start: a, end: b });
+      if (!s.code.trim() || !a || !b || C.toMin(b) === C.toMin(a)) { toast('Revisa los turnos: nombre y horas válidas.'); return; }
+      clean.push({ code: s.code.trim().toUpperCase(), start: a, end: b, lunch: s.lunch !== false });
     }
     if (new Set(clean.map(x => x.code)).size !== clean.length) { toast('Hay nombres de turno repetidos.'); return; }
-    const txt = l => l.map(s => `${s.code} ${s.start}-${s.end}`).join(' | ');
+    const txt = l => l.map(s => `${s.code} ${s.start}-${s.end}${s.lunch === false ? ' sin almuerzo' : ''}`).join(' | ');
     const before = txt(S.shifts);
     await DB.saveShifts(clean); S.shifts = clean;
     await logRow({ action: 'TURNOS', before, after: txt(clean) });

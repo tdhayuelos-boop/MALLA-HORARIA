@@ -131,8 +131,10 @@ function classify(start, end, turno, sunFest) {
   const s = toMin(start), e = toMin(end);
   const T = turno ? { s: toMin(turno.start), e: toMin(turno.end) } : { s, e };
   const ov = (a1, a2, b1, b2) => Math.max(0, Math.min(a2, b2) - Math.max(a1, b1));
-  const wk = Math.max(0, e - s - LUNCH);                              // trabajadas (sin almuerzo)
-  const tw = Math.max(0, T.e - T.s - LUNCH);                          // jornada del turno
+  // Almuerzo: lo define el turno (lunch:false = sin almuerzo). Sin turno: solo si la jornada pasa de 5 h
+  const lunch = turno ? (turno.lunch === false ? 0 : LUNCH) : (e - s > 300 ? LUNCH : 0);
+  const wk = Math.max(0, e - s - lunch);                              // trabajadas (sin almuerzo)
+  const tw = Math.max(0, T.e - T.s - lunch);                          // jornada del turno
   const covered = ov(s, e, T.s, T.e);
   const sh = (T.e - T.s) - covered;                                   // faltante dentro del turno
   const xb = Math.max(0, Math.min(e, T.s) - s);                       // antes del turno
@@ -142,7 +144,7 @@ function classify(start, end, turno, sunFest) {
   const xdiurnal = xb + (xa - na);                                    // extra diurna
   const hef = sunFest ? xdiurnal : 0;                                 // solo dom/festivo va a nómina
   const counter = sunFest ? 0 - sh : xdiurnal - sh;                      // lo que suma al contador de horas
-  return { wk, tw, sf: sunFest ? 1 : 0, ni, na, xb, xa, sh, hef, net: xb + xa - sh, counter };
+  return { wk, tw, lunch, sf: sunFest ? 1 : 0, ni, na, xb, xa, sh, hef, net: xb + xa - sh, counter };
 }
 /* Horas que una celda aporta a la nómina */
 function pay(c) {
