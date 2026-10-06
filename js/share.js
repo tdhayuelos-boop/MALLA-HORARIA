@@ -33,7 +33,7 @@ function pos(el) {
   const td = el.closest('td'), th = el.closest('th[data-day]');
   if (td && grid.contains(td)) {
     const inp = td.querySelector('input[data-e]');
-    return inp ? { ei: emps().findIndex(x => x.id === inp.dataset.e), di: +inp.dataset.d.slice(8) } : null;
+    return inp ? { ei: emps().findIndex(x => x.id === inp.dataset.e), di: +inp.dataset.d.slice(8), k: (inp.parentElement === td && td.parentElement.querySelector('input[data-k]') === inp) ? inp.dataset.k : inp.dataset.k } : null;
   }
   if (td && gridS.contains(td) && td.dataset.e) return { ei: emps().findIndex(x => x.id === td.dataset.e), di: +td.dataset.d.slice(8) };
   if (th) return { ei: -1, di: +th.dataset.day };
@@ -43,7 +43,7 @@ function setSel(a, b) {
   const n = emps().length;
   let e1 = a.ei, e2 = b.ei;
   if (e1 < 0 || e2 < 0) { e1 = 0; e2 = n - 1; }            // clic en el encabezado: todo el día
-  sel = { e1: Math.min(e1, e2), e2: Math.max(e1, e2), d1: Math.min(a.di, b.di), d2: Math.max(a.di, b.di) };
+  sel = { e1: Math.min(e1, e2), e2: Math.max(e1, e2), d1: Math.min(a.di, b.di), d2: Math.max(a.di, b.di), k: (a.ei === b.ei && a.di === b.di && a.ei >= 0) ? a.k : null };
   paint();
 }
 function clearSel() { sel = null; anchor = null; paint(); }
@@ -52,7 +52,7 @@ function paint() {
   const info = $('#selInfo'), info2 = $('#selInfo2');
   if (!sel) { if (info) info.textContent = ''; if (info2) info2.textContent = ''; return; }
   const list = emps(), inSel = (id, d) => { const ei = list.findIndex(x => x.id === id), di = +d.slice(8); return ei >= sel.e1 && ei <= sel.e2 && di >= sel.d1 && di <= sel.d2; };
-  grid.querySelectorAll('input[data-e]').forEach(inp => { if (inSel(inp.dataset.e, inp.dataset.d)) inp.closest('td').classList.add('selc'); });
+  grid.querySelectorAll('input[data-e]').forEach(inp => { if (inSel(inp.dataset.e, inp.dataset.d) && (!sel.k || sel.k === inp.dataset.k)) inp.closest('td').classList.add('selc'); });
   gridS.querySelectorAll('td.s').forEach(td => { if (inSel(td.dataset.e, td.dataset.d)) td.classList.add('selc'); });
   const nd = sel.d2 - sel.d1 + 1, np = sel.e2 - sel.e1 + 1;
   const txt = `Selección: ${np} persona${np > 1 ? 's' : ''} × ${nd} día${nd > 1 ? 's' : ''}`;
@@ -60,13 +60,19 @@ function paint() {
 }
 function onDown(g, e) {
   if (e.button !== 0) return;
+  if (e.target === document.activeElement) return;           // editando una celda: el clic coloca el cursor
   const p = pos(e.target); if (!p) return;
   lastGrid = g;
-  if (e.shiftKey && anchor) { setSel(anchor, p); e.preventDefault(); return; }
+  // quitar el foco del recuadro que se estaba editando (así se guarda) y evitar que el clic "marque texto"
+  if (document.activeElement && grid.contains(document.activeElement)) document.activeElement.blur();
+  if (e.detail < 2) e.preventDefault();                       // con doble clic sí se deja editar
+  else return;
+  if (e.shiftKey && anchor) { setSel(anchor, p); return; }
   anchor = p; dragging = true; dragGrid = g; moved = false;
-  if (p.ei < 0) { setSel(p, p); e.preventDefault(); dragging = false; }
+  if (p.ei < 0) { setSel(p, p); dragging = false; }
   else { sel = null; paint(); }
 }
+grid.addEventListener('dblclick', e => { const i = e.target; if (i.tagName === 'INPUT') { i.focus(); i.select(); } });
 grid.addEventListener('mousedown', e => onDown(grid, e));
 gridS.addEventListener('mousedown', e => onDown(gridS, e));
 document.addEventListener('mousemove', e => {
@@ -81,11 +87,37 @@ document.addEventListener('mousemove', e => {
 });
 document.addEventListener('mouseup', () => {
   // clic simple en la malla de entradas = una celda (en la de turnos el clic sigue abriendo el detalle)
-  if (dragging && !sel && anchor && anchor.ei >= 0 && dragGrid === grid) setSel(anchor, anchor);
+  if (dragging && !sel && anchor && anchor.ei >= 0) setSel(anchor, anchor);
   dragging = false; grid.classList.remove('selecting'); gridS.classList.remove('selecting');
 });
 // Shift+clic en la malla de turnos solo selecciona, no abre el detalle
-gridS.addEventListener('click', e => { if (e.shiftKey || moved) { e.stopImmediatePropagation(); moved = false; } }, true);
+gridS.addEventListener('click', e => { if (e.detail < 2 || e.shiftKey || moved) { e.stopImmediatePropagation(); moved = false; } }, true);
+function cellInput(ei, di, k) {
+  const emp = emps()[ei]; if (!emp) return null;
+  return grid.querySelector(`input[data-e="${emp.id}"][data-d="${C.ymd(S.y, S.m, di)}"][data-k="${k}"]`);
+}
+document.addEventListener('keydown', e => {
+  const a = document.activeElement;
+  if (!sel || lastGrid !== grid || !anchor || anchor.ei < 0 || $('#overlay').classList.contains('show')) return;
+  if (a && ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(a.tagName)) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = anchor.k || 's', n = emps().length, last = C.daysInMonth(S.y, S.m);
+  const go = (ei, di, kk) => {
+    if (ei < 0 || ei >= n || di < 1 || di > last) return;
+    anchor = { ei, di, k: kk }; setSel(anchor, anchor);
+    const t = cellInput(ei, di, kk); if (t) t.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  };
+  if (e.key === 'ArrowRight') { e.preventDefault(); go(anchor.ei, anchor.di + 1, k); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); go(anchor.ei, anchor.di - 1, k); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); k === 's' ? go(anchor.ei, anchor.di, 'e') : go(anchor.ei + 1, anchor.di, 's'); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); k === 'e' ? go(anchor.ei, anchor.di, 's') : go(anchor.ei - 1, anchor.di, 'e'); }
+  else if (sel.k && (e.key === 'Enter' || e.key === 'F2')) { e.preventDefault(); const t = cellInput(anchor.ei, anchor.di, k); if (t) { t.focus(); t.select(); } }
+  else if (sel.k && (e.key === 'Delete' || e.key === 'Backspace')) { e.preventDefault(); const t = cellInput(anchor.ei, anchor.di, k); if (t) { t.focus(); t.value = ''; t.blur(); } }
+  else if (sel.k && e.key.length === 1) {            // escribir sobre la celda marcada = empezar a editarla
+    e.preventDefault(); const t = cellInput(anchor.ei, anchor.di, k);
+    if (t) { t.focus(); t.value = e.key; try { t.setSelectionRange(t.value.length, t.value.length); } catch (x) { /* nada */ } }
+  }
+});
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && sel && !$('#overlay').classList.contains('show')) clearSel();
 });
