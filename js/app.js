@@ -645,7 +645,7 @@ async function showDetail(empId, date) {
       <b>Horario real</b><span>${en.start} – ${en.end}</span>
       <b>Tipo de día</b><span>${tipo}</span>
       <b>Turno</b><span>${en.shift ? esc(en.shift) + (sh ? ` (${sh.start}–${sh.end})` : '') : '<span style="color:var(--bad)">Sin frase</span>'}</span>
-      <b>Trabajadas</b><span>${esc(C.fmtDur(c.wk))} (sin 1 h de almuerzo)</span>
+      <b>Trabajadas</b><span>${esc(C.fmtDur(c.wk))} (${en.start}–${en.end} menos 1 h de almuerzo)</span>
       <b>Fuera del turno</b><span>${esc(C.describeExtra(c))}</span>
       <b>Contador de horas</b><span>${c.counter ? esc(signed(c.counter)) : '0 h'}</span>
       <b>En la nómina</b><span>${paylist}${c.sf ? ` · jornada dom/festivo ${esc(C.fmtDur(c.tw))}` : ''}</span>`;
