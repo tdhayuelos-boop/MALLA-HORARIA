@@ -24,13 +24,18 @@ grid.addEventListener('keydown', e => {
   t.scrollIntoView({ inline: 'nearest', block: 'nearest' });
 });
 
-/* ---------------- Selección de celdas ---------------- */
-let sel = null, anchor = null, dragging = false;     // sel = {e1,e2,d1,d2} (índices de persona y días)
+/* ---------------- Selección de celdas (en las dos mallas) ---------------- */
+const gridS = $('#shiftGrid');
+let sel = null, anchor = null, dragging = false, dragGrid = null, moved = false, lastGrid = grid;
 const emps = () => A.visibleEmployees();
 function pos(el) {
-  const inp = el.closest && el.closest('td') ? el.closest('td').querySelector('input[data-e]') : null;
-  if (inp) return { ei: emps().findIndex(x => x.id === inp.dataset.e), di: +inp.dataset.d.slice(8) };
-  const th = el.closest && el.closest('th[data-day]');
+  if (!el || !el.closest) return null;
+  const td = el.closest('td'), th = el.closest('th[data-day]');
+  if (td && grid.contains(td)) {
+    const inp = td.querySelector('input[data-e]');
+    return inp ? { ei: emps().findIndex(x => x.id === inp.dataset.e), di: +inp.dataset.d.slice(8) } : null;
+  }
+  if (td && gridS.contains(td) && td.dataset.e) return { ei: emps().findIndex(x => x.id === td.dataset.e), di: +td.dataset.d.slice(8) };
   if (th) return { ei: -1, di: +th.dataset.day };
   return null;
 }
@@ -43,42 +48,75 @@ function setSel(a, b) {
 }
 function clearSel() { sel = null; anchor = null; paint(); }
 function paint() {
-  grid.querySelectorAll('.selc').forEach(x => x.classList.remove('selc'));
-  const info = $('#selInfo');
-  if (!sel) { if (info) info.textContent = ''; return; }
-  const list = emps();
-  grid.querySelectorAll('input[data-e]').forEach(inp => {
-    const ei = list.findIndex(x => x.id === inp.dataset.e), di = +inp.dataset.d.slice(8);
-    if (ei >= sel.e1 && ei <= sel.e2 && di >= sel.d1 && di <= sel.d2) inp.closest('td').classList.add('selc');
-  });
+  document.querySelectorAll('#mainGrid .selc,#shiftGrid .selc').forEach(x => x.classList.remove('selc'));
+  const info = $('#selInfo'), info2 = $('#selInfo2');
+  if (!sel) { if (info) info.textContent = ''; if (info2) info2.textContent = ''; return; }
+  const list = emps(), inSel = (id, d) => { const ei = list.findIndex(x => x.id === id), di = +d.slice(8); return ei >= sel.e1 && ei <= sel.e2 && di >= sel.d1 && di <= sel.d2; };
+  grid.querySelectorAll('input[data-e]').forEach(inp => { if (inSel(inp.dataset.e, inp.dataset.d)) inp.closest('td').classList.add('selc'); });
+  gridS.querySelectorAll('td.s').forEach(td => { if (inSel(td.dataset.e, td.dataset.d)) td.classList.add('selc'); });
   const nd = sel.d2 - sel.d1 + 1, np = sel.e2 - sel.e1 + 1;
-  if (info) info.textContent = `Selección: ${np} persona${np > 1 ? 's' : ''} × ${nd} día${nd > 1 ? 's' : ''}`;
+  const txt = `Selección: ${np} persona${np > 1 ? 's' : ''} × ${nd} día${nd > 1 ? 's' : ''}`;
+  if (info) info.textContent = txt; if (info2) info2.textContent = txt;
 }
-grid.addEventListener('mousedown', e => {
+function onDown(g, e) {
   if (e.button !== 0) return;
   const p = pos(e.target); if (!p) return;
+  lastGrid = g;
   if (e.shiftKey && anchor) { setSel(anchor, p); e.preventDefault(); return; }
-  anchor = p; dragging = true;
+  anchor = p; dragging = true; dragGrid = g; moved = false;
   if (p.ei < 0) { setSel(p, p); e.preventDefault(); dragging = false; }
   else { sel = null; paint(); }
-});
+}
+grid.addEventListener('mousedown', e => onDown(grid, e));
+gridS.addEventListener('mousedown', e => onDown(gridS, e));
 document.addEventListener('mousemove', e => {
   if (!dragging) return;
   const el = document.elementFromPoint(e.clientX, e.clientY); if (!el) return;
   const p = pos(el); if (!p || p.ei < 0) return;
-  if (p.ei === anchor.ei && p.di === anchor.di && !sel) return;
-  grid.classList.add('selecting');
+  if (p.ei === anchor.ei && p.di === anchor.di && !moved) return;
+  moved = true; dragGrid.classList.add('selecting');
   if (document.activeElement && document.activeElement.blur && grid.contains(document.activeElement)) document.activeElement.blur();
+  window.getSelection && window.getSelection().removeAllRanges();
   setSel(anchor, p);
 });
 document.addEventListener('mouseup', () => {
-  if (dragging && !sel && anchor && anchor.ei >= 0) setSel(anchor, anchor);   // clic simple = una celda
-  dragging = false; grid.classList.remove('selecting');
+  // clic simple en la malla de entradas = una celda (en la de turnos el clic sigue abriendo el detalle)
+  if (dragging && !sel && anchor && anchor.ei >= 0 && dragGrid === grid) setSel(anchor, anchor);
+  dragging = false; grid.classList.remove('selecting'); gridS.classList.remove('selecting');
 });
+// Shift+clic en la malla de turnos solo selecciona, no abre el detalle
+gridS.addEventListener('click', e => { if (e.shiftKey || moved) { e.stopImmediatePropagation(); moved = false; } }, true);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && sel && !$('#overlay').classList.contains('show')) clearSel();
 });
-new MutationObserver(() => { if (sel) { const n = emps().length; if (sel.e2 >= n) sel = null; paint(); } }).observe(grid, { childList: true });
+const obs = new MutationObserver(() => { if (sel) { const n = emps().length; if (sel.e2 >= n) sel = null; paint(); } });
+obs.observe(grid, { childList: true }); obs.observe(gridS, { childList: true });
+
+/* ---------------- Copiar lo seleccionado (Ctrl+C) como en Excel ---------------- */
+function shiftText(en) {
+  if (!en || (!en.code && !en.start && !en.end)) return '';
+  if (en.code) return en.code;
+  if (!en.start || !en.end) return '';
+  return (en.shift || `${en.start}-${en.end}`) + (en.shift && en.net ? ` ${A.signed(en.net)}` : '');
+}
+function selectionText() {
+  const list = emps().slice(sel.e1, sel.e2 + 1), days = [];
+  for (let d = sel.d1; d <= sel.d2; d++) days.push(d);
+  const rows = [['Persona', ...(lastGrid === grid ? [''] : []), ...days.map(d => `${d}/${S.m + 1}/${S.y}`)]];
+  list.forEach(emp => {
+    if (lastGrid === grid) {
+      ['s', 'e'].forEach(k => rows.push([emp.name, k === 's' ? 'Entrada' : 'Salida', ...days.map(d => { const en = S.entries.get(key(emp.id, C.ymd(S.y, S.m, d))); return en ? (en.code || (k === 's' ? en.start : en.end) || '') : ''; })]));
+    } else rows.push([emp.name, ...days.map(d => shiftText(S.entries.get(key(emp.id, C.ymd(S.y, S.m, d)))))]);
+  });
+  return rows.map(r => r.join('\t')).join('\n');
+}
+document.addEventListener('copy', e => {
+  if (!sel || $('#overlay').classList.contains('show')) return;
+  const multi = sel.e1 !== sel.e2 || sel.d1 !== sel.d2 || lastGrid === gridS;
+  const a = document.activeElement;
+  if (!multi && a && a.tagName === 'INPUT') return;            // una sola celda con texto marcado: copia normal
+  e.clipboardData.setData('text/plain', selectionText()); e.preventDefault(); toast('Celdas copiadas.');
+});
 
 /* ---------------- Imagen de la malla ---------------- */
 function cellText(emp, date, k) {
@@ -137,14 +175,59 @@ function drawMalla(list, d1, d2, withTotal) {
   if (withTotal) line(x0 + tw, y0, x0 + tw, y0 + th);
   return cv;
 }
-async function shareImage() {
+function drawShifts(list, d1, d2, withTotal) {
+  const CW = 56, RH = 44, NW = 150, TW = 90, HH = 54, PAD = 14, TT = 36;
+  const nd = d2 - d1 + 1, W = PAD * 2 + NW + nd * CW + (withTotal ? TW : 0), H = PAD * 2 + TT + HH + list.length * RH;
+  const sc = 2, cv = document.createElement('canvas'); cv.width = W * sc; cv.height = H * sc;
+  const g = cv.getContext('2d'); g.scale(sc, sc);
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  g.font = '600 18px system-ui,Arial'; g.fillStyle = '#111827'; g.textBaseline = 'middle'; g.textAlign = 'left';
+  g.fillText(`Turnos · ${MESES[S.m]} ${S.y}`, PAD, PAD + TT / 2);
+  const x0 = PAD, y0 = PAD + TT, tw = W - PAD * 2, th = HH + list.length * RH;
+  const line = (x1, y1, x2, y2) => { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); };
+  g.fillStyle = '#f3f4f6'; g.fillRect(x0, y0, tw, HH);
+  g.textAlign = 'center'; g.fillStyle = '#111827'; g.font = '600 12px system-ui,Arial'; g.fillText('Persona', x0 + NW / 2, y0 + HH / 2);
+  for (let d = d1; d <= d2; d++) {
+    const date = C.ymd(S.y, S.m, d), x = x0 + NW + (d - d1) * CW, fest = C.holidayName(date) || C.dow(date) === 0;
+    if (fest) { g.fillStyle = '#fee2e2'; g.fillRect(x, y0, CW, HH); }
+    g.fillStyle = fest ? '#b91c1c' : '#111827'; g.font = '600 14px system-ui,Arial'; g.fillText(String(d), x + CW / 2, y0 + 20);
+    g.font = '11px system-ui,Arial'; g.fillText(DIAS[C.dow(date)], x + CW / 2, y0 + 38);
+  }
+  if (withTotal) { g.fillStyle = '#111827'; g.font = '600 12px system-ui,Arial'; g.fillText('Saldo de horas', x0 + NW + nd * CW + TW / 2, y0 + HH / 2); }
+  const wrap = (txt, x, y, maxW, color, font) => {
+    g.fillStyle = color; g.font = font; const words = String(txt).split(' '), lines = []; let cur = '';
+    words.forEach(w => { const t = cur ? cur + ' ' + w : w; if (g.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; });
+    lines.push(cur); const lh = 11; let yy = y - ((lines.length - 1) * lh) / 2; lines.forEach(l => { g.fillText(l, x, yy); yy += lh; });
+  };
+  list.forEach((emp, i) => {
+    const y = y0 + HH + i * RH;
+    g.textAlign = 'left'; g.fillStyle = '#111827'; g.font = '600 13px system-ui,Arial'; g.fillText(emp.name, x0 + 8, y + RH / 2, NW - 12); g.textAlign = 'center';
+    for (let d = d1; d <= d2; d++) {
+      const date = C.ymd(S.y, S.m, d), x = x0 + NW + (d - d1) * CW, en = S.entries.get(key(emp.id, date)), cx = x + CW / 2, cy = y + RH / 2;
+      if (!en || (!en.code && !en.start && !en.end)) { if (C.holidayName(date) || C.dow(date) === 0) { g.fillStyle = '#fef2f2'; g.fillRect(x, y, CW, RH); } continue; }
+      if (en.code) { g.fillStyle = en.code === 'BASE' ? '#fef3c7' : '#dcfce7'; g.fillRect(x, y, CW, RH); wrap(C.CODES[en.code], cx, cy, CW - 6, en.code === 'BASE' ? '#92400e' : '#166534', '700 9px system-ui,Arial'); }
+      else if (!en.start || !en.end) wrap('…', cx, cy, CW, '#6b7280', '12px system-ui,Arial');
+      else if (!en.shift) { wrap(en.start, cx, cy - 7, CW, '#dc2626', '700 11px system-ui,Arial'); wrap(en.end, cx, cy + 7, CW, '#dc2626', '700 11px system-ui,Arial'); }
+      else if (en.net) { g.fillStyle = '#fff1c2'; g.fillRect(x, y, CW, RH); wrap(en.shift, cx, cy - 6, CW - 6, '#7a5600', '700 9px system-ui,Arial'); wrap(A.signed(en.net), cx, cy + 12, CW, '#7a5600', '600 9px system-ui,Arial'); }
+      else { g.fillStyle = '#e8f0ff'; g.fillRect(x, y, CW, RH); wrap(en.shift, cx, cy, CW - 6, '#1e3a8a', '700 9px system-ui,Arial'); }
+    }
+    if (withTotal && A.balanceFor) { const b = A.balanceFor(emp.id), col = C.semaforo(b.total); g.fillStyle = col === 'red' ? '#fee2e2' : col === 'yellow' ? '#fef3c7' : '#dcfce7'; g.fillRect(x0 + NW + nd * CW, y, TW, RH); g.fillStyle = col === 'red' ? '#b91c1c' : col === 'yellow' ? '#92400e' : '#166534'; g.font = '700 13px system-ui,Arial'; g.fillText(b.total ? A.signed(b.total) : '0 h', x0 + NW + nd * CW + TW / 2, y + RH / 2); }
+  });
+  g.strokeStyle = '#d1d5db'; g.lineWidth = 1;
+  for (let r = 0; r <= list.length; r++) line(x0, y0 + HH + r * RH, x0 + tw, y0 + HH + r * RH);
+  line(x0, y0, x0 + tw, y0); line(x0, y0, x0, y0 + th); line(x0 + NW, y0, x0 + NW, y0 + th);
+  for (let d = d1; d <= d2 + 1; d++) line(x0 + NW + (d - d1) * CW, y0, x0 + NW + (d - d1) * CW, y0 + th);
+  if (withTotal) line(x0 + tw, y0, x0 + tw, y0 + th);
+  return cv;
+}
+async function shareImage(kind) {
   const all = emps(); if (!all.length) { toast('No hay personal.'); return; }
   const n = C.daysInMonth(S.y, S.m);
   let mode = 'full';
   if (sel) {
     const r = await dialog({
       title: 'Generar imagen de la malla',
-      body: `¿Qué quieres compartir?<br><span class="muted small">Tienes seleccionado: ${esc($('#selInfo').textContent.replace('Selección: ', ''))}.</span>`,
+      body: `¿Qué quieres compartir?<br><span class="muted small">Tienes seleccionado: ${esc(($('#selInfo').textContent || $('#selInfo2').textContent).replace('Selección: ', ''))}.</span>`,
       buttons: [{ label: 'Malla completa', value: 'full', cls: 'primary' }, { label: 'Solo días seleccionados', value: 'sel' }, { label: 'Cancelar', value: null }],
     });
     if (!r) return; mode = r;
@@ -158,9 +241,9 @@ async function shareImage() {
   }
   const list = mode === 'sel' ? all.slice(sel.e1, sel.e2 + 1) : all;
   const d1 = mode === 'sel' ? sel.d1 : 1, d2 = mode === 'sel' ? sel.d2 : n;
-  const cv = drawMalla(list, d1, d2, mode === 'full');
+  const cv = kind === 'shifts' ? drawShifts(list, d1, d2, mode === 'full') : drawMalla(list, d1, d2, mode === 'full');
   const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
-  const name = `malla-${S.y}-${String(S.m + 1).padStart(2, '0')}${mode === 'sel' ? `-dias-${d1}-${d2}` : ''}.png`;
+  const name = `${kind === 'shifts' ? 'turnos' : 'malla'}-${S.y}-${String(S.m + 1).padStart(2, '0')}${mode === 'sel' ? `-dias-${d1}-${d2}` : ''}.png`;
   const file = new File([blob], name, { type: 'image/png' });
   let done = false;
   try {
@@ -170,7 +253,8 @@ async function shareImage() {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast('Imagen descargada.');
   }
-  await A.logRow({ action: 'IMAGEN', after: mode === 'sel' ? `Imagen de días ${d1}–${d2} (${list.length} persona${list.length > 1 ? 's' : ''})` : 'Imagen de la malla completa', detail: { mes: `${S.y}-${String(S.m + 1).padStart(2, '0')}` } });
+  await A.logRow({ action: 'IMAGEN', after: (kind === 'shifts' ? '[Turnos] ' : '') + (mode === 'sel' ? `Imagen de días ${d1}–${d2} (${list.length} persona${list.length > 1 ? 's' : ''})` : 'Imagen de la malla completa'), detail: { mes: `${S.y}-${String(S.m + 1).padStart(2, '0')}` } });
 }
-$('#btnShareImg').addEventListener('click', () => A.enqueue(shareImage));
+$('#btnShareImg').addEventListener('click', () => A.enqueue(() => shareImage('main')));
+$('#btnShareImg2').addEventListener('click', () => A.enqueue(() => shareImage('shifts')));
 })();
