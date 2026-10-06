@@ -199,3 +199,11 @@ footer.sign{text-align:center;padding:18px 0 22px}
 #shiftGrid td.selc{background:#bfdbfe !important;outline:1px solid #2563eb;outline-offset:-1px}
 #shiftGrid.selecting{user-select:none;cursor:cell}
 #shiftGrid td.s{user-select:none}
+
+/* selección: nada de "texto marcado" al hacer clic */
+#mainGrid,#shiftGrid{user-select:none;-webkit-user-select:none}
+#mainGrid input{user-select:text;-webkit-user-select:text}
+#mainGrid td.selc{cursor:cell}
+#mainGrid td.selc input{cursor:cell;caret-color:transparent}
+#mainGrid td.selc input:focus{cursor:text;caret-color:auto}
+#mainGrid td.selc:has(input:focus){background:#fff8d6 !important}
