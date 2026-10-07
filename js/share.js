@@ -131,12 +131,13 @@ function shiftText(en) {
   if (!en.start || !en.end) return '';
   return (en.shift || `${en.start}-${en.end}`) + (en.shift && en.net ? ` ${A.signed(en.net)}` : '');
 }
-function selectionText() {
+function selectionText(kind) {
   const list = emps().slice(sel.e1, sel.e2 + 1), days = [];
   for (let d = sel.d1; d <= sel.d2; d++) days.push(d);
-  const rows = [['Persona', ...(lastGrid === grid ? [''] : []), ...days.map(d => `${d}/${S.m + 1}/${S.y}`)]];
+  const main = kind === 'main';
+  const rows = [['Persona', ...(main ? [''] : []), ...days.map(d => `${d}/${S.m}/${S.y}`)]];
   list.forEach(emp => {
-    if (lastGrid === grid) {
+    if (main) {
       ['s', 'e'].forEach(k => rows.push([emp.name, k === 's' ? 'Entrada' : 'Salida', ...days.map(d => { const en = S.entries.get(key(emp.id, C.ymd(S.y, S.m, d))); return en ? (en.code || (k === 's' ? en.start : en.end) || '') : ''; })]));
     } else rows.push([emp.name, ...days.map(d => shiftText(S.entries.get(key(emp.id, C.ymd(S.y, S.m, d)))))]);
   });
@@ -147,7 +148,7 @@ document.addEventListener('copy', e => {
   const multi = sel.e1 !== sel.e2 || sel.d1 !== sel.d2 || lastGrid === gridS;
   const a = document.activeElement;
   if (!multi && a && a.tagName === 'INPUT') return;            // una sola celda con texto marcado: copia normal
-  e.clipboardData.setData('text/plain', selectionText()); e.preventDefault(); toast('Celdas copiadas.');
+  e.clipboardData.setData('text/plain', selectionText(lastGrid === grid ? 'main' : 'shifts')); e.preventDefault(); toast('Celdas copiadas.');
 });
 
 /* ---------------- Imagen de la malla ---------------- */
@@ -164,7 +165,7 @@ function drawMalla(list, d1, d2, withTotal) {
   const g = cv.getContext('2d'); g.scale(sc, sc);
   g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
   g.font = '600 18px system-ui,Arial'; g.fillStyle = '#111827'; g.textBaseline = 'middle';
-  g.fillText(`Malla horaria · ${MESES[S.m]} ${S.y}`, PAD, PAD + TT / 2);
+  g.fillText(`Malla horaria · ${MESES[S.m - 1]} ${S.y}`, PAD, PAD + TT / 2);
   const x0 = PAD, y0 = PAD + TT;
   const line = (x1, y1, x2, y2) => { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); };
   g.strokeStyle = '#d1d5db'; g.lineWidth = 1;
@@ -214,7 +215,7 @@ function drawShifts(list, d1, d2, withTotal) {
   const g = cv.getContext('2d'); g.scale(sc, sc);
   g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
   g.font = '600 18px system-ui,Arial'; g.fillStyle = '#111827'; g.textBaseline = 'middle'; g.textAlign = 'left';
-  g.fillText(`Turnos · ${MESES[S.m]} ${S.y}`, PAD, PAD + TT / 2);
+  g.fillText(`Turnos · ${MESES[S.m - 1]} ${S.y}`, PAD, PAD + TT / 2);
   const x0 = PAD, y0 = PAD + TT, tw = W - PAD * 2, th = HH + list.length * RH;
   const line = (x1, y1, x2, y2) => { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); };
   g.fillStyle = '#f3f4f6'; g.fillRect(x0, y0, tw, HH);
@@ -257,7 +258,7 @@ function drawBoth(list, d1, d2, withTotal) {
   const notes = [];
   list.forEach(emp => { for (let d = d1; d <= d2; d++) {
     const en = S.entries.get(key(emp.id, C.ymd(S.y, S.m, d)));
-    if (en && en.code === 'BASE' && en.calc && en.calc.nota) notes.push(`${emp.name} · ${d} de ${MESES[S.m]}: ${en.calc.nota}`);
+    if (en && en.code === 'BASE' && en.calc && en.calc.nota) notes.push(`${emp.name} · ${d} de ${MESES[S.m - 1]}: ${en.calc.nota}`);
   } });
   const sc = 2, W = Math.max(c1.width, c2.width) / sc, PAD = 14, LH = 18;
   const probe = document.createElement('canvas').getContext('2d'); probe.font = '13px system-ui,Arial';
@@ -275,6 +276,11 @@ function drawBoth(list, d1, d2, withTotal) {
   }
   return cv;
 }
+async function copyToClipboard(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (x) { /* sin portapapeles */ } ta.remove(); }
+  toast('Celdas copiadas.');
+}
 async function shareImage() {
   const all = emps(); if (!all.length) { toast('No hay personal.'); return; }
   const n = C.daysInMonth(S.y, S.m);
@@ -283,9 +289,13 @@ async function shareImage() {
     const r = await dialog({
       title: 'Generar imagen de la malla',
       body: `¿Qué quieres compartir?<br><span class="muted small">Tienes seleccionado: ${esc(($('#selInfo').textContent || $('#selInfo2').textContent).replace('Selección: ', ''))}.</span>`,
-      buttons: [{ label: 'Malla completa', value: 'full', cls: 'primary' }, { label: 'Solo días seleccionados', value: 'sel' }, { label: 'Cancelar', value: null }],
+      buttons: [{ label: 'Imagen: malla completa', value: 'full', cls: 'primary' }, { label: 'Imagen: solo días seleccionados', value: 'sel' },
+        { label: 'Copiar texto: horas (entrada y salida)', value: 'copy-main' }, { label: 'Copiar texto: turnos', value: 'copy-shifts' }, { label: 'Cancelar', value: null }],
+      stack: true,
     });
-    if (!r) return; mode = r;
+    if (!r) return;
+    if (r === 'copy-main' || r === 'copy-shifts') { await copyToClipboard(selectionText(r === 'copy-main' ? 'main' : 'shifts')); return; }
+    mode = r;
   } else {
     const r = await dialog({
       title: 'Generar imagen de la malla',
@@ -298,17 +308,17 @@ async function shareImage() {
   const d1 = mode === 'sel' ? sel.d1 : 1, d2 = mode === 'sel' ? sel.d2 : n;
   const cv = drawBoth(list, d1, d2, mode === 'full');
   const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
-  const name = `malla-${S.y}-${String(S.m + 1).padStart(2, '0')}${mode === 'sel' ? `-dias-${d1}-${d2}` : ''}.png`;
+  const name = `malla-${S.y}-${String(S.m).padStart(2, '0')}${mode === 'sel' ? `-dias-${d1}-${d2}` : ''}.png`;
   const file = new File([blob], name, { type: 'image/png' });
   let done = false;
   try {
-    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: `Malla ${MESES[S.m]} ${S.y}` }); done = true; }
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: `Malla ${MESES[S.m - 1]} ${S.y}` }); done = true; }
   } catch (err) { if (err && err.name === 'AbortError') return; }
   if (!done) {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast('Imagen descargada.');
   }
-  await A.logRow({ action: 'IMAGEN', after: (mode === 'sel' ? `Imagen de días ${d1}–${d2} (${list.length} persona${list.length > 1 ? 's' : ''})` : 'Imagen de la malla completa'), detail: { mes: `${S.y}-${String(S.m + 1).padStart(2, '0')}` } });
+  await A.logRow({ action: 'IMAGEN', after: (mode === 'sel' ? `Imagen de días ${d1}–${d2} (${list.length} persona${list.length > 1 ? 's' : ''})` : 'Imagen de la malla completa'), detail: { mes: `${S.y}-${String(S.m).padStart(2, '0')}` } });
 }
 [$('#btnShareImg'), $('#btnShareImg2')].forEach(b => { if (b) b.addEventListener('click', () => A.enqueue(shareImage)); });
 })();

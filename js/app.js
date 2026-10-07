@@ -499,14 +499,14 @@ async function processCell(empId, date) {
   }
 
   /* 5. Reglas de descansos */
-  if (code === 'D' && C.dow(date) === 0) {
+  if (code === 'C' && C.dow(date) === 0) {
     const r = await dialog({
-      title: 'Domingo con D', body: 'Los domingos va C (compensatorio de la semana). ¿Deseas corregir este dato?',
-      buttons: [{ label: 'Sí, poner C', value: true, cls: 'primary' }, { label: 'No, dejar D', value: false }],
+      title: 'Domingo con C', body: 'Los domingos va D (descanso). ¿Deseas corregir este dato?',
+      buttons: [{ label: 'Sí, poner D', value: true, cls: 'primary' }, { label: 'No, dejar C', value: false }],
     });
     if (r === null) return revert();
-    notices.push(`Domingo con D: ${r ? 'se corrigió a C' : 'se dejó D'}`);
-    if (r) code = 'C';
+    notices.push(`Domingo con C: ${r ? 'se corrigió a D' : 'se dejó C'}`);
+    if (r) code = 'D';
   }
   const newCell = { code, start: code || st, end: code || en };
   const cellBefore = d => S.entries.get(key(empId, d)) || null;
