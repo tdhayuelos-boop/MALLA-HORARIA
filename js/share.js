@@ -160,7 +160,7 @@ function cellText(emp, date, k) {
 }
 function drawMalla(list, d1, d2, withTotal) {
   const CW = 52, RH = 26, NW = 150, LW = 62, TW = 90, HH = 54, PAD = 14, TT = 36;
-  const nd = d2 - d1 + 1, W = PAD * 2 + NW + LW + nd * CW + (withTotal ? TW : 0), H = PAD * 2 + TT + HH + list.length * RH * 2;
+  const nd = d2 - d1 + 1, W = PAD * 2 + NW + LW + nd * CW + (withTotal ? TW : 0) + TW, H = PAD * 2 + TT + HH + list.length * RH * 2;
   const sc = 2, cv = document.createElement('canvas'); cv.width = W * sc; cv.height = H * sc;
   const g = cv.getContext('2d'); g.scale(sc, sc);
   g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
@@ -181,7 +181,10 @@ function drawMalla(list, d1, d2, withTotal) {
     g.font = '11px system-ui,Arial'; g.fillText(DIAS[C.dow(date)], x + CW / 2, y0 + 38);
   }
   if (withTotal) { g.fillStyle = '#111827'; g.font = '600 12px system-ui,Arial'; g.fillText('Horas', x0 + NW + LW + nd * CW + TW / 2, y0 + HH / 2); }
+  const sx = x0 + NW + LW + nd * CW + (withTotal ? TW : 0);              // columna "Horas pendientes" (siempre)
+  g.fillStyle = '#111827'; g.font = '600 12px system-ui,Arial'; g.fillText('Horas pend.', sx + TW / 2, y0 + HH / 2);
   list.forEach((emp, i) => {
+    if (A.balanceFor) { const b = A.balanceFor(emp.id), col = C.semaforo(b.total), y = y0 + HH + i * 2 * RH; g.fillStyle = col === 'red' ? '#fee2e2' : col === 'yellow' ? '#fef3c7' : '#dcfce7'; g.fillRect(sx, y, TW, RH * 2); g.fillStyle = col === 'red' ? '#b91c1c' : col === 'yellow' ? '#92400e' : '#166534'; g.font = '700 14px system-ui,Arial'; g.textAlign = 'center'; g.fillText(b.total ? A.signed(b.total) : '0 h', sx + TW / 2, y + RH); }
     ['s', 'e'].forEach((k, j) => {
       const y = y0 + HH + (i * 2 + j) * RH;
       if (j === 0) { g.fillStyle = '#111827'; g.font = '600 13px system-ui,Arial'; g.textAlign = 'left'; g.fillText(emp.name, x0 + 8, y + RH, NW - 12); }
@@ -201,16 +204,16 @@ function drawMalla(list, d1, d2, withTotal) {
   // rejilla
   g.strokeStyle = '#d1d5db';
   const tw = W - PAD * 2, th = HH + list.length * RH * 2;
-  for (let r = 0; r <= list.length * 2; r++) line(x0 + (r % 2 === 0 || true ? (r % 2 ? NW : 0) : 0), y0 + HH + r * RH, x0 + tw, y0 + HH + r * RH);
+  for (let r = 0; r <= list.length * 2; r++) line(x0 + (r % 2 === 0 || true ? (r % 2 ? NW : 0) : 0), y0 + HH + r * RH, r % 2 ? sx : x0 + tw, y0 + HH + r * RH);
   line(x0, y0, x0 + tw, y0); line(x0, y0 + HH, x0 + tw, y0 + HH);
   [0, NW, NW + LW].forEach(dx => line(x0 + dx, y0, x0 + dx, y0 + th));
   for (let d = d1; d <= d2 + 1; d++) line(x0 + NW + LW + (d - d1) * CW, y0, x0 + NW + LW + (d - d1) * CW, y0 + th);
-  if (withTotal) line(x0 + tw, y0, x0 + tw, y0 + th);
+  line(sx, y0, sx, y0 + th); line(x0 + tw, y0, x0 + tw, y0 + th);
   return cv;
 }
 function drawShifts(list, d1, d2, withTotal) {
   const CW = 56, RH = 44, NW = 150, TW = 90, HH = 54, PAD = 14, TT = 36;
-  const nd = d2 - d1 + 1, W = PAD * 2 + NW + nd * CW + (withTotal ? TW : 0), H = PAD * 2 + TT + HH + list.length * RH;
+  const nd = d2 - d1 + 1, W = PAD * 2 + NW + nd * CW + TW, H = PAD * 2 + TT + HH + list.length * RH;
   const sc = 2, cv = document.createElement('canvas'); cv.width = W * sc; cv.height = H * sc;
   const g = cv.getContext('2d'); g.scale(sc, sc);
   g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
@@ -226,7 +229,7 @@ function drawShifts(list, d1, d2, withTotal) {
     g.fillStyle = fest ? '#b91c1c' : '#111827'; g.font = '600 14px system-ui,Arial'; g.fillText(String(d), x + CW / 2, y0 + 20);
     g.font = '11px system-ui,Arial'; g.fillText(DIAS[C.dow(date)], x + CW / 2, y0 + 38);
   }
-  if (withTotal) { g.fillStyle = '#111827'; g.font = '600 12px system-ui,Arial'; g.fillText('Saldo de horas', x0 + NW + nd * CW + TW / 2, y0 + HH / 2); }
+  { g.fillStyle = '#111827'; g.font = '600 12px system-ui,Arial'; g.fillText('Horas pend.', x0 + NW + nd * CW + TW / 2, y0 + HH / 2); }
   const wrap = (txt, x, y, maxW, color, font) => {
     g.fillStyle = color; g.font = font; const words = String(txt).split(' '), lines = []; let cur = '';
     words.forEach(w => { const t = cur ? cur + ' ' + w : w; if (g.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; });
@@ -244,13 +247,13 @@ function drawShifts(list, d1, d2, withTotal) {
       else if (en.net) { g.fillStyle = '#fff1c2'; g.fillRect(x, y, CW, RH); wrap(en.shift, cx, cy - 6, CW - 6, '#7a5600', '700 9px system-ui,Arial'); wrap(A.signed(en.net), cx, cy + 12, CW, '#7a5600', '600 9px system-ui,Arial'); }
       else { g.fillStyle = '#e8f0ff'; g.fillRect(x, y, CW, RH); wrap(en.shift, cx, cy, CW - 6, '#1e3a8a', '700 9px system-ui,Arial'); }
     }
-    if (withTotal && A.balanceFor) { const b = A.balanceFor(emp.id), col = C.semaforo(b.total); g.fillStyle = col === 'red' ? '#fee2e2' : col === 'yellow' ? '#fef3c7' : '#dcfce7'; g.fillRect(x0 + NW + nd * CW, y, TW, RH); g.fillStyle = col === 'red' ? '#b91c1c' : col === 'yellow' ? '#92400e' : '#166534'; g.font = '700 13px system-ui,Arial'; g.fillText(b.total ? A.signed(b.total) : '0 h', x0 + NW + nd * CW + TW / 2, y + RH / 2); }
+    if (A.balanceFor) { const b = A.balanceFor(emp.id), col = C.semaforo(b.total); g.fillStyle = col === 'red' ? '#fee2e2' : col === 'yellow' ? '#fef3c7' : '#dcfce7'; g.fillRect(x0 + NW + nd * CW, y, TW, RH); g.fillStyle = col === 'red' ? '#b91c1c' : col === 'yellow' ? '#92400e' : '#166534'; g.font = '700 13px system-ui,Arial'; g.fillText(b.total ? A.signed(b.total) : '0 h', x0 + NW + nd * CW + TW / 2, y + RH / 2); }
   });
   g.strokeStyle = '#d1d5db'; g.lineWidth = 1;
   for (let r = 0; r <= list.length; r++) line(x0, y0 + HH + r * RH, x0 + tw, y0 + HH + r * RH);
   line(x0, y0, x0 + tw, y0); line(x0, y0, x0, y0 + th); line(x0 + NW, y0, x0 + NW, y0 + th);
   for (let d = d1; d <= d2 + 1; d++) line(x0 + NW + (d - d1) * CW, y0, x0 + NW + (d - d1) * CW, y0 + th);
-  if (withTotal) line(x0 + tw, y0, x0 + tw, y0 + th);
+  line(x0 + tw, y0, x0 + tw, y0 + th);
   return cv;
 }
 function drawBoth(list, d1, d2, withTotal) {
