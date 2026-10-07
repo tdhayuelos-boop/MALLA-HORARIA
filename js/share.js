@@ -252,7 +252,30 @@ function drawShifts(list, d1, d2, withTotal) {
   if (withTotal) line(x0 + tw, y0, x0 + tw, y0 + th);
   return cv;
 }
-async function shareImage(kind) {
+function drawBoth(list, d1, d2, withTotal) {
+  const c1 = drawMalla(list, d1, d2, withTotal), c2 = drawShifts(list, d1, d2, withTotal);
+  const notes = [];
+  list.forEach(emp => { for (let d = d1; d <= d2; d++) {
+    const en = S.entries.get(key(emp.id, C.ymd(S.y, S.m, d)));
+    if (en && en.code === 'BASE' && en.calc && en.calc.nota) notes.push(`${emp.name} · ${d} de ${MESES[S.m]}: ${en.calc.nota}`);
+  } });
+  const sc = 2, W = Math.max(c1.width, c2.width) / sc, PAD = 14, LH = 18;
+  const probe = document.createElement('canvas').getContext('2d'); probe.font = '13px system-ui,Arial';
+  const lines = [];
+  notes.forEach(t => { let cur = ''; t.split(' ').forEach(w => { const x = cur ? cur + ' ' + w : w; if (probe.measureText(x).width > W - PAD * 2 && cur) { lines.push(cur); cur = '  ' + w; } else cur = x; }); lines.push(cur); });
+  const notesH = notes.length ? PAD + 24 + lines.length * LH : 0;
+  const H = c1.height / sc + c2.height / sc + notesH;
+  const cv = document.createElement('canvas'); cv.width = W * sc; cv.height = H * sc;
+  const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+  g.drawImage(c1, 0, 0); g.drawImage(c2, 0, c1.height);
+  if (notes.length) {
+    g.scale(sc, sc); let y = (c1.height + c2.height) / sc + PAD; g.textBaseline = 'middle'; g.textAlign = 'left';
+    g.fillStyle = '#92400e'; g.font = '700 14px system-ui,Arial'; g.fillText('Novedades (BASE)', PAD, y + 8); y += 26;
+    g.fillStyle = '#111827'; g.font = '13px system-ui,Arial'; lines.forEach(l => { g.fillText(l, PAD, y + 8); y += LH; });
+  }
+  return cv;
+}
+async function shareImage() {
   const all = emps(); if (!all.length) { toast('No hay personal.'); return; }
   const n = C.daysInMonth(S.y, S.m);
   let mode = 'full';
@@ -273,9 +296,9 @@ async function shareImage(kind) {
   }
   const list = mode === 'sel' ? all.slice(sel.e1, sel.e2 + 1) : all;
   const d1 = mode === 'sel' ? sel.d1 : 1, d2 = mode === 'sel' ? sel.d2 : n;
-  const cv = kind === 'shifts' ? drawShifts(list, d1, d2, mode === 'full') : drawMalla(list, d1, d2, mode === 'full');
+  const cv = drawBoth(list, d1, d2, mode === 'full');
   const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
-  const name = `${kind === 'shifts' ? 'turnos' : 'malla'}-${S.y}-${String(S.m + 1).padStart(2, '0')}${mode === 'sel' ? `-dias-${d1}-${d2}` : ''}.png`;
+  const name = `malla-${S.y}-${String(S.m + 1).padStart(2, '0')}${mode === 'sel' ? `-dias-${d1}-${d2}` : ''}.png`;
   const file = new File([blob], name, { type: 'image/png' });
   let done = false;
   try {
@@ -285,8 +308,7 @@ async function shareImage(kind) {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast('Imagen descargada.');
   }
-  await A.logRow({ action: 'IMAGEN', after: (kind === 'shifts' ? '[Turnos] ' : '') + (mode === 'sel' ? `Imagen de días ${d1}–${d2} (${list.length} persona${list.length > 1 ? 's' : ''})` : 'Imagen de la malla completa'), detail: { mes: `${S.y}-${String(S.m + 1).padStart(2, '0')}` } });
+  await A.logRow({ action: 'IMAGEN', after: (mode === 'sel' ? `Imagen de días ${d1}–${d2} (${list.length} persona${list.length > 1 ? 's' : ''})` : 'Imagen de la malla completa'), detail: { mes: `${S.y}-${String(S.m + 1).padStart(2, '0')}` } });
 }
-$('#btnShareImg').addEventListener('click', () => A.enqueue(() => shareImage('main')));
-$('#btnShareImg2').addEventListener('click', () => A.enqueue(() => shareImage('shifts')));
+[$('#btnShareImg'), $('#btnShareImg2')].forEach(b => { if (b) b.addEventListener('click', () => A.enqueue(shareImage)); });
 })();
