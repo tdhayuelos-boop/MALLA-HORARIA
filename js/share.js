@@ -139,7 +139,7 @@ function selectionText(kind) {
   list.forEach(emp => {
     if (main) {
       ['s', 'e'].forEach(k => rows.push([emp.name, k === 's' ? 'Entrada' : 'Salida', ...days.map(d => { const en = S.entries.get(key(emp.id, C.ymd(S.y, S.m, d))); return en ? (en.code || (k === 's' ? en.start : en.end) || '') : ''; })]));
-    } else rows.push([emp.name, ...days.map(d => shiftText(S.entries.get(key(emp.id, C.ymd(S.y, S.m, d)))))]);
+    } else rows.push([...days.map(d => shiftText(S.entries.get(key(emp.id, C.ymd(S.y, S.m, d)))))]);
   });
   return rows.map(r => r.join('\t')).join('\n');
 }
@@ -290,7 +290,7 @@ async function shareImage() {
       title: 'Generar imagen de la malla',
       body: `¿Qué quieres compartir?<br><span class="muted small">Tienes seleccionado: ${esc(($('#selInfo').textContent || $('#selInfo2').textContent).replace('Selección: ', ''))}.</span>`,
       buttons: [{ label: 'Imagen: malla completa', value: 'full', cls: 'primary' }, { label: 'Imagen: solo días seleccionados', value: 'sel' },
-        { label: 'Copiar texto de los turnos (persona + turnos)', value: 'copy-shifts' }, { label: 'Cancelar', value: null }],
+        { label: 'Copiar texto de los turnos', value: 'copy-shifts' }, { label: 'Cancelar', value: null }],
       stack: true,
     });
     if (!r) return;
