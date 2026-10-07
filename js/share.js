@@ -129,13 +129,13 @@ function shiftText(en) {
   if (!en || (!en.code && !en.start && !en.end)) return '';
   if (en.code) return en.code;
   if (!en.start || !en.end) return '';
-  return (en.shift || `${en.start}-${en.end}`) + (en.shift && en.net ? ` ${A.signed(en.net)}` : '');
+  return en.shift || '';                                  // solo el nombre del turno: sin horas ni +/−
 }
 function selectionText(kind) {
   const list = emps().slice(sel.e1, sel.e2 + 1), days = [];
   for (let d = sel.d1; d <= sel.d2; d++) days.push(d);
   const main = kind === 'main';
-  const rows = [['Persona', ...(main ? [''] : []), ...days.map(d => `${d}/${S.m}/${S.y}`)]];
+  const rows = main ? [['Persona', '', ...days.map(d => `${d}/${S.m}/${S.y}`)]] : [];   // los turnos van solo con la fila de cada persona
   list.forEach(emp => {
     if (main) {
       ['s', 'e'].forEach(k => rows.push([emp.name, k === 's' ? 'Entrada' : 'Salida', ...days.map(d => { const en = S.entries.get(key(emp.id, C.ymd(S.y, S.m, d))); return en ? (en.code || (k === 's' ? en.start : en.end) || '') : ''; })]));
@@ -290,11 +290,11 @@ async function shareImage() {
       title: 'Generar imagen de la malla',
       body: `¿Qué quieres compartir?<br><span class="muted small">Tienes seleccionado: ${esc(($('#selInfo').textContent || $('#selInfo2').textContent).replace('Selección: ', ''))}.</span>`,
       buttons: [{ label: 'Imagen: malla completa', value: 'full', cls: 'primary' }, { label: 'Imagen: solo días seleccionados', value: 'sel' },
-        { label: 'Copiar texto: horas (entrada y salida)', value: 'copy-main' }, { label: 'Copiar texto: turnos', value: 'copy-shifts' }, { label: 'Cancelar', value: null }],
+        { label: 'Copiar texto de los turnos (persona + turnos)', value: 'copy-shifts' }, { label: 'Cancelar', value: null }],
       stack: true,
     });
     if (!r) return;
-    if (r === 'copy-main' || r === 'copy-shifts') { await copyToClipboard(selectionText(r === 'copy-main' ? 'main' : 'shifts')); return; }
+    if (r === 'copy-shifts') { await copyToClipboard(selectionText('shifts')); return; }
     mode = r;
   } else {
     const r = await dialog({
