@@ -162,6 +162,8 @@ function describeExtra(c) {
   return p.length ? p.join(' · ') : 'sin horas fuera del turno';
 }
 /* Cierre sugerido: el turno que termina a las 20:00 o después y más cerca de la salida sin pasarse */
+/* Sugerencia por la ENTRADA: el turno cuya entrada coincide (si hay varios, el primero de la lista) */
+function suggestShift(shifts, start) { return shifts.find(t => t.start === start) || null; }
 function suggestCierre(shifts, end) {
   const e = toMin(end);
   if (e < CLOSE_FROM) return null;
@@ -341,7 +343,7 @@ const api = {
   ymd, parseDate, addDays, dow, weekStart, daysInMonth, monthOf,
   easter, holidays, holidayName, isHoliday, isSunFest, monthHolidays,
   parseTime, toMin, fmtDur, hoursDec, parseHours, parseCode,
-  classify, pay, describeExtra, suggestCierre, invPairs,
+  classify, pay, describeExtra, suggestCierre, suggestShift, invPairs,
   weekEvents, sundayWorked, restFlow, closingDeadline, editPolicy, summarize,
   semaforo, fmtInvDate, invPairDates, buildComment,
 };

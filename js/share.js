@@ -212,7 +212,9 @@ function drawMalla(list, d1, d2, withTotal) {
   return cv;
 }
 function drawShifts(list, d1, d2, withTotal) {
-  const CW = 56, RH = 44, NW = 150, TW = 90, HH = 54, PAD = 14, TT = 36;
+  const CW = 56, RH0 = 44, NW = 150, TW = 90, HH = 54, PAD = 14, TT = 36;
+  const tall = list.some(emp => { for (let x = d1; x <= d2; x++) { const e = S.entries.get(key(emp.id, C.ymd(S.y, S.m, x))); if (e && e.calc && (e.calc.permiso || e.calc.descanso)) return true; } return false; });
+  const RH = tall ? 84 : RH0;
   const nd = d2 - d1 + 1, W = PAD * 2 + NW + nd * CW + TW, H = PAD * 2 + TT + HH + list.length * RH;
   const sc = 2, cv = document.createElement('canvas'); cv.width = W * sc; cv.height = H * sc;
   const g = cv.getContext('2d'); g.scale(sc, sc);
@@ -241,10 +243,11 @@ function drawShifts(list, d1, d2, withTotal) {
     for (let d = d1; d <= d2; d++) {
       const date = C.ymd(S.y, S.m, d), x = x0 + NW + (d - d1) * CW, en = S.entries.get(key(emp.id, date)), cx = x + CW / 2, cy = y + RH / 2;
       if (!en || (!en.code && !en.start && !en.end)) { if (C.holidayName(date) || C.dow(date) === 0) { g.fillStyle = '#fef2f2'; g.fillRect(x, y, CW, RH); } continue; }
-      if (en.code) { g.fillStyle = en.code === 'BASE' ? '#fef3c7' : '#dcfce7'; g.fillRect(x, y, CW, RH); wrap(C.CODES[en.code], cx, cy, CW - 6, en.code === 'BASE' ? '#92400e' : '#166534', '700 9px system-ui,Arial'); }
+      if (en.code === 'D' && en.calc && en.calc.descanso) { const q = en.calc.descanso; g.fillStyle = '#dcfce7'; g.fillRect(x, y, CW, RH); wrap('DESCANSO', cx, y + 14, CW - 6, '#166534', '700 9px system-ui,Arial'); wrap(`${q.start}–${q.end}`, cx, y + 32, CW - 4, '#166534', '600 9px system-ui,Arial'); wrap(`${C.fmtDur(q.paid)} pagadas`, cx, y + 48, CW - 4, '#166534', '600 9px system-ui,Arial'); }
+      else if (en.code) { g.fillStyle = en.code === 'BASE' ? '#fef3c7' : '#dcfce7'; g.fillRect(x, y, CW, RH); wrap(C.CODES[en.code], cx, cy, CW - 6, en.code === 'BASE' ? '#92400e' : '#166534', '700 9px system-ui,Arial'); }
       else if (!en.start || !en.end) wrap('…', cx, cy, CW, '#6b7280', '12px system-ui,Arial');
       else if (!en.shift) { wrap(en.start, cx, cy - 7, CW, '#dc2626', '700 11px system-ui,Arial'); wrap(en.end, cx, cy + 7, CW, '#dc2626', '700 11px system-ui,Arial'); }
-      else if (en.net) { g.fillStyle = '#fff1c2'; g.fillRect(x, y, CW, RH); wrap(en.shift, cx, cy - 6, CW - 6, '#7a5600', '700 9px system-ui,Arial'); wrap(A.signed(en.net), cx, cy + 12, CW, '#7a5600', '600 9px system-ui,Arial'); }
+      else if (en.net) { g.fillStyle = '#fff1c2'; g.fillRect(x, y, CW, RH); const t0 = tall ? y + 12 : cy - 6; wrap(en.shift, cx, t0, CW - 6, '#7a5600', '700 9px system-ui,Arial'); wrap(A.signed(en.net), cx, tall ? y + 26 : cy + 12, CW, '#7a5600', '600 9px system-ui,Arial'); if (en.calc && en.calc.permiso) wrap('Permiso por reuniones equipo comercial', cx, y + 58, CW - 4, '#7a5600', '600 7.5px system-ui,Arial'); }
       else { g.fillStyle = '#e8f0ff'; g.fillRect(x, y, CW, RH); wrap(en.shift, cx, cy, CW - 6, '#1e3a8a', '700 9px system-ui,Arial'); }
     }
     if (A.balanceFor) { const b = A.balanceFor(emp.id), col = C.semaforo(b.total); g.fillStyle = col === 'red' ? '#fee2e2' : col === 'yellow' ? '#fef3c7' : '#dcfce7'; g.fillRect(x0 + NW + nd * CW, y, TW, RH); g.fillStyle = col === 'red' ? '#b91c1c' : col === 'yellow' ? '#92400e' : '#166534'; g.font = '700 13px system-ui,Arial'; g.fillText(b.total ? A.signed(b.total) : '0 h', x0 + NW + nd * CW + TW / 2, y + RH / 2); }
@@ -262,6 +265,7 @@ function drawBoth(list, d1, d2, withTotal) {
   list.forEach(emp => { for (let d = d1; d <= d2; d++) {
     const en = S.entries.get(key(emp.id, C.ymd(S.y, S.m, d)));
     if (en && en.code === 'BASE' && en.calc && en.calc.nota) notes.push(`${emp.name} · ${d} de ${MESES[S.m - 1]}: ${en.calc.nota}`);
+    if (en && en.calc && en.calc.motivo) notes.push(`${emp.name} · ${d} de ${MESES[S.m - 1]}: horario incompleto — ${en.calc.motivo}`);
   } });
   const sc = 2, W = Math.max(c1.width, c2.width) / sc, PAD = 14, LH = 18;
   const probe = document.createElement('canvas').getContext('2d'); probe.font = '13px system-ui,Arial';
@@ -274,7 +278,7 @@ function drawBoth(list, d1, d2, withTotal) {
   g.drawImage(c1, 0, 0); g.drawImage(c2, 0, c1.height);
   if (notes.length) {
     g.scale(sc, sc); let y = (c1.height + c2.height) / sc + PAD; g.textBaseline = 'middle'; g.textAlign = 'left';
-    g.fillStyle = '#92400e'; g.font = '700 14px system-ui,Arial'; g.fillText('Novedades (BASE)', PAD, y + 8); y += 26;
+    g.fillStyle = '#92400e'; g.font = '700 14px system-ui,Arial'; g.fillText('Novedades', PAD, y + 8); y += 26;
     g.fillStyle = '#111827'; g.font = '13px system-ui,Arial'; lines.forEach(l => { g.fillText(l, PAD, y + 8); y += LH; });
   }
   return cv;

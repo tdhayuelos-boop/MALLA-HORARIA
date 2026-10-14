@@ -72,12 +72,14 @@ function dialog({ title, body = '', buttons = [{ label: 'Aceptar', value: true, 
   });
 }
 /* promptForm: formulario con campos; devuelve {campo: valor} o null si se cancela */
-function promptForm({ title, body = '', fields, okLabel = 'Guardar', cancelLabel = 'Cancelar' }) {
+function promptForm({ title, body = '', fields, okLabel = 'Guardar', cancelLabel = 'Cancelar', validate = null }) {
   return new Promise(res => {
     const finish = v => { hideOverlay(); res(v); };
     const f = fields.map(x => {
       const common = `name="${x.id}" ${x.placeholder ? `placeholder="${esc(x.placeholder)}"` : ''}`;
-      const inner = x.type === 'textarea'
+      const inner = x.type === 'select'
+        ? `<select ${common}>${x.options.map(o => `<option value="${esc(o[0])}" ${String(o[0]) === String(x.value) ? 'selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`
+        : x.type === 'textarea'
         ? `<textarea ${common} rows="3">${esc(x.value || '')}</textarea>`
         : `<input ${common} type="${x.type || 'text'}" value="${esc(x.value || '')}" autocomplete="off">`;
       return `<label class="fl">${esc(x.label)}${inner}</label>`;
@@ -94,6 +96,8 @@ function promptForm({ title, body = '', fields, okLabel = 'Guardar', cancelLabel
         if (x.required && !v) { $('#pfErr').textContent = `Falta: ${x.label}.`; form.elements[x.id].focus(); return; }
         out[x.id] = v;
       }
+      const bad = validate && validate(out);
+      if (bad) { $('#pfErr').textContent = bad; return; }
       finish(out);
     };
     const first = form.querySelector('input,textarea'); if (first) first.focus();
@@ -178,7 +182,7 @@ async function logRow(r) {
 A.logRow = logRow;
 function describeEntry(en) {
   if (!en) return '';
-  if (en.code) return `${en.code} · ${C.CODES[en.code]}${en.code === 'BASE' && en.calc && en.calc.nota ? ' · ' + en.calc.nota : ''}`;
+  if (en.code) return `${en.code} · ${C.CODES[en.code]}${en.code === 'BASE' && en.calc && en.calc.nota ? ' · ' + en.calc.nota : ''}${en.code === 'D' && en.calc && en.calc.descanso ? ` · horario ${en.calc.descanso.start}–${en.calc.descanso.end}` : ''}`;
   if (!en.start && !en.end) return '';
   if (!en.start || !en.end) return `${en.start || '?'}–${en.end || '?'} (incompleto)`;
   let s = `${en.start}–${en.end}`;
@@ -283,13 +287,21 @@ function renderMain() {
   }
   $('#mainGrid').innerHTML = html + '</tbody></table>';
 }
-const noteTitle = en => (en && en.code === 'BASE' && en.calc && en.calc.nota ? `title="${esc('Novedad: ' + en.calc.nota)}"` : '');
+const noteText = en => {
+  if (!en || !en.calc) return '';
+  if (en.code === 'BASE' && en.calc.nota) return 'Novedad: ' + en.calc.nota;
+  if (en.calc.motivo) return 'Motivo del horario incompleto: ' + en.calc.motivo;
+  if (en.code === 'D' && en.calc.descanso) { const d = en.calc.descanso; return `Horario del descanso: ${d.start}–${d.end}${d.lunch ? ' con almuerzo' : ' sin almuerzo'} · ${C.fmtDur(d.paid)} pagadas (solo registro)`; }
+  return '';
+};
+const noteTitle = en => (noteText(en) ? `title="${esc(noteText(en))}"` : '');
 function cellView(en) {
   if (!en || (!en.code && !en.start && !en.end)) return { cls: '', html: '' };
+  if (en.code === 'D' && en.calc && en.calc.descanso) { const d = en.calc.descanso; return { cls: 'code c-D', html: `DESCANSO<small class="perm">${esc(d.start)}–${esc(d.end)}</small><small class="perm">${esc(C.fmtDur(d.paid))} pagadas</small>` }; }
   if (en.code) return { cls: 'code c-' + en.code, html: esc(C.CODES[en.code]) };
   if (!en.start || !en.end) return { cls: 'part', html: '…' };
   if (!en.shift) return { cls: 'bad', html: `<div>${en.start}</div><div>${en.end}</div>` };
-  if (en.net) return { cls: 'adj', html: `${esc(en.shift)}<small>${signed(en.net)}</small>` };
+  if (en.net) return { cls: 'adj', html: `${esc(en.shift)}<small>${signed(en.net)}</small>${en.calc && en.calc.permiso ? `<small class="perm">${PERMISO_TXT}</small>` : ''}` };
   return { cls: 'ok', html: esc(en.shift) };
 }
 function renderShifts() {
@@ -382,8 +394,10 @@ async function gatherPolicy(prev, date) {
 /* Elegir turno                                                        */
 /* ------------------------------------------------------------------ */
 /* Devuelve {shift: turno|null} o undefined si se cancela */
+const PERMISO_TXT = 'Permiso por reuniones equipo comercial';
 async function chooseShift(emp, date, st, en, sunFest, forceList) {
-  const sug = forceList ? null : C.suggestCierre(S.shifts, en);
+  if (!S.shifts.length) { toast('No hay turnos creados: agrégalos en el botón “Turnos”.'); return undefined; }
+  const sug = forceList ? null : C.suggestShift(S.shifts, st);      // se sugiere por la ENTRADA
   const head = `${esc(emp.name)} · ${esc(fdl(date))}<br>Registraste <b>${st} – ${en}</b>.`;
   if (sug) {
     const cl = C.classify(st, en, sug, sunFest);
@@ -398,14 +412,35 @@ async function chooseShift(emp, date, st, en, sunFest, forceList) {
   const opts = S.shifts.map((t, i) => ({
     label: `<b>${esc(t.code)}</b> · ${t.start}–${t.end}<br><span class="small muted">${esc(C.describeExtra(C.classify(st, en, t, sunFest)))}</span>`, value: i,
   }));
-  opts.push({ label: 'Dejar sin frase <span style="color:var(--bad)">(se muestran las horas en rojo)</span>', value: -1 });
   const r = await dialog({
     title: sug ? 'Elige el turno' : 'Se detectó un horario no habitual',
-    body: `${head} ¿Qué horario deseas poner?`, buttons: opts, stack: true,
+    body: `${head} Debes elegir el turno que corresponde.`, buttons: opts, stack: true,
   });
   if (r === null) return undefined;
-  return { shift: r >= 0 ? S.shifts[r] : null };
+  return { shift: S.shifts[r] };
 }
+/* Días más cortos que el turno: 1–2 h faltantes = permiso automático; más de 2 h = se pregunta y, si no es permiso, motivo obligatorio.
+   Devuelve el cálculo con la marca, o null si se cancela. Las horas faltantes siempre descuentan del contador. */
+async function shortfallFlow(emp, date, calc, notices) {
+  const sh = calc.sh;
+  if (!sh || sh <= 0) return calc;
+  if (sh <= 120) { notices.push(`${PERMISO_TXT} (faltan ${C.fmtDur(sh)})`); return { ...calc, permiso: true }; }
+  const r = await dialog({
+    title: 'Jornada incompleta',
+    body: `${esc(emp.name)} · ${esc(fdl(date))}<br>Faltan <b>${esc(C.fmtDur(sh))}</b> para completar el turno. ¿Se registra como <b>“${PERMISO_TXT}”</b>?<br><span class="small muted">Las horas faltantes se descuentan de las horas pendientes.</span>`,
+    buttons: [{ label: 'Sí, poner el permiso', value: true, cls: 'primary' }, { label: 'No', value: false }],
+  });
+  if (r === null) return null;
+  if (r) { notices.push(`${PERMISO_TXT} (faltan ${C.fmtDur(sh)})`); return { ...calc, permiso: true }; }
+  const f = await promptForm({
+    title: 'Motivo del horario incompleto', body: `${esc(emp.name)} · ${esc(fdl(date))} · faltan ${esc(C.fmtDur(sh))}. Escribe el motivo; sin motivo no se guarda el día.`,
+    fields: [{ id: 'motivo', label: 'Motivo', type: 'textarea', required: true }], okLabel: 'Guardar motivo',
+  });
+  if (!f) return null;
+  notices.push(`Horario incompleto (faltan ${C.fmtDur(sh)}): ${f.motivo}`);
+  return { ...calc, motivo: f.motivo };
+}
+
 
 /* ------------------------------------------------------------------ */
 /* Edición de una celda de la malla principal                          */
@@ -428,7 +463,7 @@ async function processCell(empId, date) {
   const sIn = q('s'), eIn = q('e');
   const paint = en => {
     const td = sIn && sIn.parentElement, td2 = eIn && eIn.parentElement;
-    [td, td2].forEach(t => { if (t) { t.className = dcls(date) + ' ' + (en ? codeCls(en.code) : ''); const n = en && en.code === 'BASE' && en.calc && en.calc.nota; if (n) t.title = 'Novedad: ' + n; else t.removeAttribute('title'); } });
+    [td, td2].forEach(t => { if (t) { t.className = dcls(date) + ' ' + (en ? codeCls(en.code) : ''); const n = noteText(en); if (n) t.title = n; else t.removeAttribute('title'); } });
   };
   const setInputs = en => { if (sIn) sIn.value = en ? (en.code || en.start || '') : ''; if (eIn) eIn.value = en ? (en.code || en.end || '') : ''; paint(en); };
   const revert = () => setInputs(prev);
@@ -508,6 +543,7 @@ async function processCell(empId, date) {
     notices.push(`Domingo con C: ${r ? 'se corrigió a D' : 'se dejó C'}`);
     if (r) code = 'D';
   }
+  let descInfo = null;                                         // horario del descanso doble (solo registro)
   const newCell = { code, start: code || st, end: code || en };
   const cellBefore = d => S.entries.get(key(empId, d)) || null;
   const cellAfter = d => (d === date ? newCell : cellBefore(d));
@@ -533,6 +569,23 @@ async function processCell(empId, date) {
     }
     addDec.push({ emp: empId, kind: 'doble_descanso', ref: res.candidate, value: { minutes: C.DAY_MIN } });
     notices.push(`Doble descanso: se descuentan 7 h pendientes por el D del ${fd(res.candidate)}`);
+    /* Ventana del horario que haría ese día (solo se muestra en la malla de turnos; no afecta horas ni nómina) */
+    const f = await promptForm({
+      title: 'Horario del descanso doble',
+      body: `${esc(emp.name)} · ${esc(fdl(res.candidate))}<br>¿Qué horario haría ese día si trabajara? Es solo un registro: no cambia las horas ni la nómina.`,
+      fields: [
+        { id: 'start', label: 'Hora de entrada', placeholder: 'Ej. 10', required: true },
+        { id: 'end', label: 'Hora de salida', placeholder: 'Ej. 6 (= 18:00)', required: true },
+        { id: 'lunch', label: 'Almuerzo', type: 'select', options: [['1', 'Sí, 1 hora de almuerzo'], ['0', 'No']], value: '1' },
+      ],
+      okLabel: 'Guardar horario',
+      validate: o => { const a = C.parseTime(o.start, 's'), b = C.parseTime(o.end, 'e'); return !a || !b || C.toMin(b) <= C.toMin(a) ? 'Revisa las horas: la salida debe ser después de la entrada.' : null; },
+    });
+    if (!f) { notices.push('Doble descanso cancelado: no se registró el horario'); await logNotices(); return revert(); }
+    const a = C.parseTime(f.start, 's'), b = C.parseTime(f.end, 'e'), lunch = f.lunch === '1';
+    const paid = Math.max(0, C.toMin(b) - C.toMin(a) - (lunch ? C.LUNCH : 0));
+    descInfo = { forDate: res.candidate, v: { start: a, end: b, lunch, paid } };
+    notices.push(`Horario del descanso del ${fd(res.candidate)}: ${a}–${b}${lunch ? ' con almuerzo' : ' sin almuerzo'} · ${C.fmtDur(paid)} pagadas (solo registro)`);
   }
 
   /* 5b. Inventario: al formarse la pareja de INV se pregunta la tienda */
@@ -563,6 +616,7 @@ async function processCell(empId, date) {
 
   /* 5c. BASE: se pregunta la novedad y queda guardada en la celda */
   let shift = null, calc = null;
+  if (descInfo && descInfo.forDate === date) calc = { descanso: descInfo.v };
   if (code === 'BASE') {
     const f = await promptForm({
       title: 'Novedad del turno BASE', body: `${esc(emp.name)} · ${esc(fdl(date))}<br>¿Qué novedad tiene este día? (incapacidad, vacaciones, licencia, ausencia…)`,
@@ -583,7 +637,10 @@ async function processCell(empId, date) {
       if (ch === undefined) return revert();
       shift = ch.shift;
     }
+    if (!shift) return revert();
     calc = C.classify(st, en, shift, sunFest);
+    calc = await shortfallFlow(emp, date, calc, notices);
+    if (!calc) return revert();
   }
 
   /* 7. Guardar */
@@ -601,6 +658,10 @@ async function processCell(empId, date) {
   });
   await DB.upsertEntry(entry);
   S.entries.set(key(empId, date), entry);
+  if (descInfo && descInfo.forDate !== date) {                  // el D que se detectó como doble es de otro día: se anota ahí
+    const t = S.entries.get(key(empId, descInfo.forDate));
+    if (t && t.code) { const e2 = { ...t, calc: { ...(t.calc || {}), descanso: descInfo.v }, updatedAt: nowIso, updatedBy: S.user.code }; await DB.upsertEntry(e2); S.entries.set(key(empId, descInfo.forDate), e2); }
+  }
   await applyDecisions(); await logNotices();
   setInputs(entry); renderShifts(); updateTotals(); refreshOthers();
 }
@@ -635,7 +696,7 @@ async function showDetail(empId, date) {
   const tipo = C.holidayName(date) ? `Festivo (${esc(C.holidayName(date))})` : C.dow(date) === 0 ? 'Domingo' : 'Día normal';
   let rows, buttons = [{ label: 'Cerrar', value: 'x', cls: 'primary' }];
   if (en.code) {
-    rows = `<b>Código</b><span>${esc(en.code)} · ${esc(C.CODES[en.code])}</span><b>Tipo de día</b><span>${tipo}</span>${en.code === 'BASE' && en.calc && en.calc.nota ? `<b>Novedad</b><span>${esc(en.calc.nota)}</span>` : ''}`;
+    rows = `<b>Código</b><span>${esc(en.code)} · ${esc(C.CODES[en.code])}</span><b>Tipo de día</b><span>${tipo}</span>${en.code === 'BASE' && en.calc && en.calc.nota ? `<b>Novedad</b><span>${esc(en.calc.nota)}</span>` : ''}${en.code === 'D' && en.calc && en.calc.descanso ? `<b>Horario del descanso</b><span>${esc(en.calc.descanso.start)}–${esc(en.calc.descanso.end)} · ${en.calc.descanso.lunch ? 'con' : 'sin'} almuerzo · ${esc(C.fmtDur(en.calc.descanso.paid))} pagadas (solo registro)</span>` : ''}`;
   } else if (!en.start || !en.end) {
     rows = `<b>Estado</b><span>Incompleto: falta ${en.start ? 'la salida' : 'la entrada'}</span>`;
   } else {
@@ -648,6 +709,7 @@ async function showDetail(empId, date) {
       <b>Trabajadas</b><span>${esc(C.fmtDur(c.wk))} (${c.lunch === 0 ? `${en.start}–${en.end}, sin almuerzo` : `${en.start}–${en.end} menos 1 h de almuerzo`})</span>
       <b>Fuera del turno</b><span>${esc(C.describeExtra(c))}</span>
       <b>Contador de horas</b><span>${c.counter ? esc(signed(c.counter)) : '0 h'}</span>
+      ${c.permiso ? `<b>Permiso</b><span>${PERMISO_TXT}</span>` : ''}${c.motivo ? `<b>Motivo</b><span>${esc(c.motivo)}</span>` : ''}
       <b>En la nómina</b><span>${paylist}${c.sf ? ` · jornada dom/festivo ${esc(C.fmtDur(c.tw))}` : ''}</span>`;
     buttons.unshift({ label: 'Cambiar turno', value: 'chg' });
   }
@@ -663,7 +725,9 @@ async function changeShift(empId, date) {
   const sunFest = C.isSunFest(date);
   const ch = await chooseShift(emp, date, prev.start, prev.end, sunFest, true);
   if (ch === undefined) return;
-  const calc = C.classify(prev.start, prev.end, ch.shift, sunFest);
+  const notices = [];
+  let calc = C.classify(prev.start, prev.end, ch.shift, sunFest);
+  if (ch.shift.code !== prev.shift) { calc = await shortfallFlow(emp, date, calc, notices); if (!calc) return; }
   const nowIso = new Date().toISOString();
   const entry = { ...prev, shift: ch.shift ? ch.shift.code : null, calc, net: calc.net, counter: calc.counter, updatedAt: nowIso, updatedBy: S.user.code, createdAt: pol.policy === 'free' ? prev.createdAt : nowIso };
   if (entry.shift === prev.shift) return;
@@ -672,6 +736,7 @@ async function changeShift(empId, date) {
     comment: pol.comment || 'Cambio de turno', annuls: prev.logId, detail: pol.policy === 'free' ? null : { plazo: pol.policy, admin: pol.admin },
   });
   await DB.upsertEntry(entry); S.entries.set(key(empId, date), entry);
+  for (const n of notices) await logRow({ action: 'AVISO', emp: empId, empName: emp.name, refDate: date, after: n });
   renderShifts(); updateTotals(); refreshOthers();
 }
 
