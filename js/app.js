@@ -182,7 +182,7 @@ async function logRow(r) {
 A.logRow = logRow;
 function describeEntry(en) {
   if (!en) return '';
-  if (en.code) return `${en.code} · ${C.CODES[en.code]}${en.code === 'BASE' && en.calc && en.calc.nota ? ' · ' + en.calc.nota : ''}${en.code === 'D' && en.calc && en.calc.descanso ? ` · horario ${en.calc.descanso.start}–${en.calc.descanso.end}` : ''}`;
+  if (en.code) return `${en.code} · ${C.CODES[en.code]}${en.code === 'BASE' && en.calc && en.calc.nota ? ' · ' + en.calc.nota : ''}${en.code && en.code !== 'BASE' && en.calc && en.calc.descanso ? ` · horario ${en.calc.descanso.start}–${en.calc.descanso.end}` : ''}`;
   if (!en.start && !en.end) return '';
   if (!en.start || !en.end) return `${en.start || '?'}–${en.end || '?'} (incompleto)`;
   let s = `${en.start}–${en.end}`;
@@ -258,7 +258,7 @@ const dcls = date => {
   const dw = C.dow(date);
   return (C.isHoliday(date) ? 'fest ' : dw === 0 ? 'sun ' : '') + (S.hl && date === C.ymd(S.y, S.m, S.hl) ? 'hl' : '');
 };
-const codeCls = code => (['C', 'D', 'F'].includes(code) ? 'code-rest' : ['INC', 'LIC', 'AUS', 'VAC'].includes(code) ? 'code-leave' : code === 'INV' ? 'code-inv' : code === 'BASE' ? 'code-base' : '');
+const codeCls = code => (['C', 'D', 'F', 'PT'].includes(code) ? 'code-rest' : ['INC', 'LIC', 'AUS', 'VAC'].includes(code) ? 'code-leave' : code === 'INV' ? 'code-inv' : code === 'BASE' ? 'code-base' : '');
 function headCells() {
   let h = '';
   for (let d = 1; d <= C.daysInMonth(S.y, S.m); d++) {
@@ -291,13 +291,13 @@ const noteText = en => {
   if (!en || !en.calc) return '';
   if (en.code === 'BASE' && en.calc.nota) return 'Novedad: ' + en.calc.nota;
   if (en.calc.motivo) return 'Motivo del horario incompleto: ' + en.calc.motivo;
-  if (en.code === 'D' && en.calc.descanso) { const d = en.calc.descanso; return `Horario del descanso: ${d.start}–${d.end}${d.lunch ? ' con almuerzo' : ' sin almuerzo'} · ${C.fmtDur(d.paid)} pagadas (solo registro)`; }
+  if (en.code !== 'BASE' && en.calc.descanso) { const d = en.calc.descanso; return `Horario del descanso: ${d.start}–${d.end}${d.lunch ? ' con almuerzo' : ' sin almuerzo'} · ${C.fmtDur(d.paid)} pagadas (solo registro)`; }
   return '';
 };
 const noteTitle = en => (noteText(en) ? `title="${esc(noteText(en))}"` : '');
 function cellView(en) {
   if (!en || (!en.code && !en.start && !en.end)) return { cls: '', html: '' };
-  if (en.code === 'D' && en.calc && en.calc.descanso) { const d = en.calc.descanso; return { cls: 'code c-D', html: `DESCANSO<small class="perm">${esc(d.start)}–${esc(d.end)}</small><small class="perm">${esc(C.fmtDur(d.paid))} pagadas</small>` }; }
+  if (en.code && en.code !== 'BASE' && en.calc && en.calc.descanso) { const d = en.calc.descanso; return { cls: 'code c-' + en.code, html: `${esc(C.CODES[en.code])}<small class="perm">${esc(d.start)}–${esc(d.end)}</small><small class="perm">${esc(C.fmtDur(d.paid))} pagadas</small>` }; }
   if (en.code) return { cls: 'code c-' + en.code, html: esc(C.CODES[en.code]) };
   if (!en.start || !en.end) return { cls: 'part', html: '…' };
   if (!en.shift) return { cls: 'bad', html: `<div>${en.start}</div><div>${en.end}</div>` };
@@ -454,7 +454,7 @@ function decisionsOf(empId, drop, add) {
   }
   return { disc, partida };
 }
-const EVT = { C: 'compensatorio (C)', D: 'descanso (D)', INV: 'inventario (INV)', PREV: 'descanso en la parte de la semana del mes anterior' };
+const EVT = { C: 'compensatorio (C)', D: 'descanso (D)', PT: 'pago de tiempo (PT)', INV: 'inventario (INV)', PREV: 'descanso en la parte de la semana del mes anterior' };
 
 async function processCell(empId, date) {
   const emp = S.employees.find(e => e.id === empId);
@@ -470,16 +470,18 @@ async function processCell(empId, date) {
   const notices = [];                                         // respuestas a avisos para el registro
 
   /* 1. Leer lo que escribió el usuario */
-  const rawS = sIn.value.trim(), rawE = eIn.value.trim();
+  let rawS = sIn.value.trim(), rawE = eIn.value.trim();
+  // un código (C, D, PT…) tiene los dos recuadros iguales: si borran uno de los dos, se entiende que quieren borrar la celda
+  if (prev && prev.code && ((!rawS && C.parseCode(rawE) === prev.code) || (!rawE && C.parseCode(rawS) === prev.code))) { rawS = ''; rawE = ''; }
   const c1 = C.parseCode(rawS), c2 = C.parseCode(rawE);
   let code = '', st = '', en = '';
   if (c1 || c2) {
     if (c1 && c2 && c1 !== c2) { toast('Los dos recuadros tienen códigos distintos.'); return revert(); }
     code = c1 || c2;
-    if (!C.INPUT_CODES.includes(code)) { toast('Ese código ya no se usa. Escribe C, D o BASE.'); return revert(); }
+    if (!C.INPUT_CODES.includes(code)) { toast('Ese código ya no se usa. Escribe C, D, PT o BASE.'); return revert(); }
   } else {
     st = C.parseTime(rawS, 's'); en = C.parseTime(rawE, 'e');
-    if (st === null || en === null) { toast('Hora no válida. Ejemplos: 8, 8:30, 1430 o un código (C, D o BASE).'); return revert(); }
+    if (st === null || en === null) { toast('Hora no válida. Ejemplos: 8, 8:30, 1430 o un código (C, D, PT o BASE).'); return revert(); }
     if (st && en && C.toMin(en) <= C.toMin(st)) { toast('La salida debe ser después de la entrada.'); return revert(); }
   }
   const isEmpty = !code && !st && !en;
@@ -534,6 +536,15 @@ async function processCell(empId, date) {
   }
 
   /* 5. Reglas de descansos */
+  if (code === 'D' && C.dow(date) !== 0) {
+    const r = await dialog({
+      title: 'D solo en domingo', body: 'El descanso (D) solo se pone en domingo. Entre semana va C (compensatorio). ¿Deseas corregirlo a C?',
+      buttons: [{ label: 'Sí, poner C', value: true, cls: 'primary' }, { label: 'Cancelar', value: false }],
+    });
+    if (!r) return revert();
+    notices.push('D entre semana: se corrigió a C');
+    code = 'C';
+  }
   if (code === 'C' && C.dow(date) === 0) {
     const r = await dialog({
       title: 'Domingo con C', body: 'Los domingos va D (descanso). ¿Deseas corregir este dato?',
@@ -696,7 +707,7 @@ async function showDetail(empId, date) {
   const tipo = C.holidayName(date) ? `Festivo (${esc(C.holidayName(date))})` : C.dow(date) === 0 ? 'Domingo' : 'Día normal';
   let rows, buttons = [{ label: 'Cerrar', value: 'x', cls: 'primary' }];
   if (en.code) {
-    rows = `<b>Código</b><span>${esc(en.code)} · ${esc(C.CODES[en.code])}</span><b>Tipo de día</b><span>${tipo}</span>${en.code === 'BASE' && en.calc && en.calc.nota ? `<b>Novedad</b><span>${esc(en.calc.nota)}</span>` : ''}${en.code === 'D' && en.calc && en.calc.descanso ? `<b>Horario del descanso</b><span>${esc(en.calc.descanso.start)}–${esc(en.calc.descanso.end)} · ${en.calc.descanso.lunch ? 'con' : 'sin'} almuerzo · ${esc(C.fmtDur(en.calc.descanso.paid))} pagadas (solo registro)</span>` : ''}`;
+    rows = `<b>Código</b><span>${esc(en.code)} · ${esc(C.CODES[en.code])}</span><b>Tipo de día</b><span>${tipo}</span>${en.code === 'BASE' && en.calc && en.calc.nota ? `<b>Novedad</b><span>${esc(en.calc.nota)}</span>` : ''}${en.code && en.code !== 'BASE' && en.calc && en.calc.descanso ? `<b>Horario del descanso</b><span>${esc(en.calc.descanso.start)}–${esc(en.calc.descanso.end)} · ${en.calc.descanso.lunch ? 'con' : 'sin'} almuerzo · ${esc(C.fmtDur(en.calc.descanso.paid))} pagadas (solo registro)</span>` : ''}`;
   } else if (!en.start || !en.end) {
     rows = `<b>Estado</b><span>Incompleto: falta ${en.start ? 'la salida' : 'la entrada'}</span>`;
   } else {

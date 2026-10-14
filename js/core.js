@@ -113,10 +113,10 @@ function parseHours(raw) {
 const CODES = {
   C: 'COMPENSATORIO', D: 'DESCANSO', F: 'FESTIVO', INV: 'INVENTARIO',
   INC: 'INCAPACIDAD', VAC: 'VACACIONES', AUS: 'AUSENCIA', LIC: 'LICENCIA',
-  BASE: 'TURNO BASE',
+  BASE: 'TURNO BASE', PT: 'PAGO TIEMPO',
 };
 /* Los únicos códigos que se pueden escribir ahora (los demás solo se leen si ya existían) */
-const INPUT_CODES = ['C', 'D', 'BASE'];
+const INPUT_CODES = ['C', 'D', 'BASE', 'PT'];
 const NONWORK = ['INC', 'VAC', 'AUS', 'LIC'];
 function parseCode(raw) {
   const c = String(raw == null ? '' : raw).trim().toUpperCase();
@@ -198,7 +198,8 @@ function weekEvents(cellAt, ws, dec) {
   for (let i = 0; i < 7; i++) {
     const d = addDays(ws, i), c = cellAt(d);
     if (!c) continue;
-    if (c.code === 'C') evs.push({ type: 'C', date: d });
+    if (c.code === 'C') evs.push({ type: 'C', date: d, disc: dec.disc.has(d) });
+    if (c.code === 'PT') evs.push({ type: 'PT', date: d, disc: dec.disc.has(d) });     // pago de tiempo: vale como una C
     if (c.code === 'D') evs.push({ type: 'D', date: d, disc: dec.disc.has(d) });
   }
   if (dec.partida && dec.partida[ws]) evs.push({ type: 'PREV', date: ws });
@@ -234,12 +235,12 @@ function restFlow(cellBefore, cellAfter, date, dec) {
   }
 
   // Doble descanso
-  const counted = after.filter(x => !(x.type === 'D' && x.disc));
+  const counted = after.filter(x => !(['C', 'D', 'PT'].includes(x.type) && x.disc));
   if (counted.length <= 1) return { status: 'ok' };
-  const ds = counted.filter(x => x.type === 'D');
-  const pick = ds.find(x => fresh.some(f => f.type === 'D' && f.date === x.date)) || ds[0];
+  const ds = counted.filter(x => ['C', 'D', 'PT'].includes(x.type));       // el descanso extra puede ser C, D o PT
+  const pick = ds.find(x => fresh.some(f => f.type === x.type && f.date === x.date)) || ds[ds.length - 1];
   if (!pick) {
-    return { status: 'block', msg: 'Esta semana ya tiene su descanso (' + counted.map(x => `${x.type} ${x.date}`).join(', ') + '). Solo un D adicional se puede descontar como horas pendientes; una C o un INV extra no se permiten.' };
+    return { status: 'block', msg: 'Esta semana ya tiene su descanso (' + counted.map(x => `${x.type} ${x.date}`).join(', ') + '). Un INV extra no se permite.' };
   }
   return { status: 'ask', candidate: pick.date, events: counted, ws };
 }
@@ -266,7 +267,7 @@ function editPolicy(prev, dateStr, now) {
 /* ------------------------------------------------------------------ */
 function summarize(list, from, to, base) {
   const r = {
-    days: base, BASE: 0, INC: 0, VAC: 0, AUS: 0, LIC: 0, C: 0, D: 0, F: 0, invDays: 0, invPairs: 0,
+    days: base, BASE: 0, PT: 0, INC: 0, VAC: 0, AUS: 0, LIC: 0, C: 0, D: 0, F: 0, invDays: 0, invPairs: 0,
     sfDays: 0, sfMin: 0, HFC: 0, HF: 0, HRN: 0, 'HRND&F': 0, 'HEND&F': 0, HEN: 0, HEF: 0,
     workedDays: 0, workedMin: 0, counter: 0, net: 0,
   };

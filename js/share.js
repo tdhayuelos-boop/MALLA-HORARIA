@@ -112,7 +112,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'ArrowDown') { e.preventDefault(); k === 's' ? go(anchor.ei, anchor.di, 'e') : go(anchor.ei + 1, anchor.di, 's'); }
   else if (e.key === 'ArrowUp') { e.preventDefault(); k === 'e' ? go(anchor.ei, anchor.di, 's') : go(anchor.ei - 1, anchor.di, 'e'); }
   else if (sel.k && (e.key === 'Enter' || e.key === 'F2')) { e.preventDefault(); const t = cellInput(anchor.ei, anchor.di, k); if (t) { t.focus(); t.select(); } }
-  else if (sel.k && (e.key === 'Delete' || e.key === 'Backspace')) { e.preventDefault(); const t = cellInput(anchor.ei, anchor.di, k); if (t) { t.focus(); t.value = ''; t.blur(); } }
+  else if (sel.k && (e.key === 'Delete' || e.key === 'Backspace')) { e.preventDefault(); const t = cellInput(anchor.ei, anchor.di, k), t2 = cellInput(anchor.ei, anchor.di, k === 's' ? 'e' : 's'); if (t) { if (t2) t2.value = ''; t.focus(); t.value = ''; t.blur(); } }
   else if (sel.k && e.key.length === 1) {            // escribir sobre la celda marcada = empezar a editarla
     e.preventDefault(); const t = cellInput(anchor.ei, anchor.di, k);
     if (t) { t.focus(); t.value = e.key; try { t.setSelectionRange(t.value.length, t.value.length); } catch (x) { /* nada */ } }
@@ -243,7 +243,7 @@ function drawShifts(list, d1, d2, withTotal) {
     for (let d = d1; d <= d2; d++) {
       const date = C.ymd(S.y, S.m, d), x = x0 + NW + (d - d1) * CW, en = S.entries.get(key(emp.id, date)), cx = x + CW / 2, cy = y + RH / 2;
       if (!en || (!en.code && !en.start && !en.end)) { if (C.holidayName(date) || C.dow(date) === 0) { g.fillStyle = '#fef2f2'; g.fillRect(x, y, CW, RH); } continue; }
-      if (en.code === 'D' && en.calc && en.calc.descanso) { const q = en.calc.descanso; g.fillStyle = '#dcfce7'; g.fillRect(x, y, CW, RH); wrap('DESCANSO', cx, y + 14, CW - 6, '#166534', '700 9px system-ui,Arial'); wrap(`${q.start}–${q.end}`, cx, y + 32, CW - 4, '#166534', '600 9px system-ui,Arial'); wrap(`${C.fmtDur(q.paid)} pagadas`, cx, y + 48, CW - 4, '#166534', '600 9px system-ui,Arial'); }
+      if (en.code && en.code !== 'BASE' && en.calc && en.calc.descanso) { const q = en.calc.descanso; g.fillStyle = '#dcfce7'; g.fillRect(x, y, CW, RH); wrap(C.CODES[en.code], cx, y + 14, CW - 6, '#166534', '700 9px system-ui,Arial'); wrap(`${q.start}–${q.end}`, cx, y + 32, CW - 4, '#166534', '600 9px system-ui,Arial'); wrap(`${C.fmtDur(q.paid)} pagadas`, cx, y + 48, CW - 4, '#166534', '600 9px system-ui,Arial'); }
       else if (en.code) { g.fillStyle = en.code === 'BASE' ? '#fef3c7' : '#dcfce7'; g.fillRect(x, y, CW, RH); wrap(C.CODES[en.code], cx, cy, CW - 6, en.code === 'BASE' ? '#92400e' : '#166534', '700 9px system-ui,Arial'); }
       else if (!en.start || !en.end) wrap('…', cx, cy, CW, '#6b7280', '12px system-ui,Arial');
       else if (!en.shift) { wrap(en.start, cx, cy - 7, CW, '#dc2626', '700 11px system-ui,Arial'); wrap(en.end, cx, cy + 7, CW, '#dc2626', '700 11px system-ui,Arial'); }
