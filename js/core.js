@@ -163,7 +163,15 @@ function describeExtra(c) {
 }
 /* Cierre sugerido: el turno que termina a las 20:00 o después y más cerca de la salida sin pasarse */
 /* Sugerencia por la ENTRADA: el turno cuya entrada coincide (si hay varios, el primero de la lista) */
-function suggestShift(shifts, start) { return shifts.find(t => t.start === start) || null; }
+function suggestShift(shifts, start, end) {
+  const byStart = shifts.find(t => t.start === start) || null;
+  // Día de cierre incompleto (ej. 15 a 20: el CIERRE 5 termina a las 23, pero se sale a las 20): se sugiere el turno que termina a esa hora
+  if (byStart && end && toMin(end) >= CLOSE_FROM && toMin(end) < toMin(byStart.end)) {
+    const alt = shifts.filter(t => t.end === end && toMin(t.start) <= toMin(start)).sort((a, b) => toMin(b.start) - toMin(a.start))[0];
+    if (alt) return alt;
+  }
+  return byStart;
+}
 function suggestCierre(shifts, end) {
   const e = toMin(end);
   if (e < CLOSE_FROM) return null;

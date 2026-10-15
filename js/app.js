@@ -397,7 +397,7 @@ async function gatherPolicy(prev, date) {
 const PERMISO_TXT = 'Permiso por reuniones equipo comercial';
 async function chooseShift(emp, date, st, en, sunFest, forceList) {
   if (!S.shifts.length) { toast('No hay turnos creados: agrégalos en el botón “Turnos”.'); return undefined; }
-  const sug = forceList ? null : C.suggestShift(S.shifts, st);      // se sugiere por la ENTRADA
+  const sug = forceList ? null : C.suggestShift(S.shifts, st, en);      // se sugiere por la ENTRADA
   const head = `${esc(emp.name)} · ${esc(fdl(date))}<br>Registraste <b>${st} – ${en}</b>.`;
   if (sug) {
     const cl = C.classify(st, en, sug, sunFest);
