@@ -127,6 +127,7 @@ obs.observe(grid, { childList: true }); obs.observe(gridS, { childList: true });
 /* ---------------- Copiar lo seleccionado (Ctrl+C) como en Excel ---------------- */
 function shiftText(en) {
   if (!en || (!en.code && !en.start && !en.end)) return '';
+  if (en.code === 'PT') return (en.calc && en.calc.descanso && A.descText(en.calc.descanso)) || 'PT';   // PT: el texto del horario
   if (en.code) return en.code;
   if (!en.start || !en.end) return '';
   return en.shift || '';                                  // solo el nombre del turno: sin horas ni +/−
@@ -243,7 +244,7 @@ function drawShifts(list, d1, d2, withTotal) {
     for (let d = d1; d <= d2; d++) {
       const date = C.ymd(S.y, S.m, d), x = x0 + NW + (d - d1) * CW, en = S.entries.get(key(emp.id, date)), cx = x + CW / 2, cy = y + RH / 2;
       if (!en || (!en.code && !en.start && !en.end)) { if (C.holidayName(date) || C.dow(date) === 0) { g.fillStyle = '#fef2f2'; g.fillRect(x, y, CW, RH); } continue; }
-      if (en.code && en.code !== 'BASE' && en.calc && en.calc.descanso) { const q = en.calc.descanso; g.fillStyle = '#dcfce7'; g.fillRect(x, y, CW, RH); wrap(C.CODES[en.code], cx, y + 14, CW - 6, '#166534', '700 9px system-ui,Arial'); wrap(`${q.start}–${q.end}`, cx, y + 32, CW - 4, '#166534', '600 9px system-ui,Arial'); wrap(`${C.fmtDur(q.paid)} pagadas`, cx, y + 48, CW - 4, '#166534', '600 9px system-ui,Arial'); }
+      if (en.code && en.code !== 'BASE' && en.calc && en.calc.descanso) { const q = en.calc.descanso; g.fillStyle = '#dcfce7'; g.fillRect(x, y, CW, RH); wrap(C.CODES[en.code], cx, y + 14, CW - 6, '#166534', '700 9px system-ui,Arial'); wrap(A.descText(q), cx, y + 32, CW - 4, '#166534', '600 9px system-ui,Arial'); wrap(`${C.fmtDur(q.paid)} pagadas`, cx, y + 48, CW - 4, '#166534', '600 9px system-ui,Arial'); }
       else if (en.code) { g.fillStyle = en.code === 'BASE' ? '#fef3c7' : '#dcfce7'; g.fillRect(x, y, CW, RH); wrap(C.CODES[en.code], cx, cy, CW - 6, en.code === 'BASE' ? '#92400e' : '#166534', '700 9px system-ui,Arial'); }
       else if (!en.start || !en.end) wrap('…', cx, cy, CW, '#6b7280', '12px system-ui,Arial');
       else if (!en.shift) { wrap(en.start, cx, cy - 7, CW, '#dc2626', '700 11px system-ui,Arial'); wrap(en.end, cx, cy + 7, CW, '#dc2626', '700 11px system-ui,Arial'); }

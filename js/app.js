@@ -182,7 +182,7 @@ async function logRow(r) {
 A.logRow = logRow;
 function describeEntry(en) {
   if (!en) return '';
-  if (en.code) return `${en.code} · ${C.CODES[en.code]}${en.code === 'BASE' && en.calc && en.calc.nota ? ' · ' + en.calc.nota : ''}${en.code && en.code !== 'BASE' && en.calc && en.calc.descanso ? ` · horario ${en.calc.descanso.start}–${en.calc.descanso.end}` : ''}`;
+  if (en.code) return `${en.code} · ${C.CODES[en.code]}${en.code === 'BASE' && en.calc && en.calc.nota ? ' · ' + en.calc.nota : ''}${en.code && en.code !== 'BASE' && en.calc && en.calc.descanso ? ` · horario ${descText(en.calc.descanso)}` : ''}`;
   if (!en.start && !en.end) return '';
   if (!en.start || !en.end) return `${en.start || '?'}–${en.end || '?'} (incompleto)`;
   let s = `${en.start}–${en.end}`;
@@ -287,17 +287,20 @@ function renderMain() {
   }
   $('#mainGrid').innerHTML = html + '</tbody></table>';
 }
+/* texto del horario de un descanso doble: el nombre del turno que corresponde (APERTURA 2…) y, si no hay, las horas */
+const descText = d => d.shift || ((S.shifts.find(t => t.start === d.start && t.end === d.end) || {}).code) || `${d.start}–${d.end}`;
+A.descText = descText;
 const noteText = en => {
   if (!en || !en.calc) return '';
   if (en.code === 'BASE' && en.calc.nota) return 'Novedad: ' + en.calc.nota;
   if (en.calc.motivo) return 'Motivo del horario incompleto: ' + en.calc.motivo;
-  if (en.code !== 'BASE' && en.calc.descanso) { const d = en.calc.descanso; return `Horario del descanso: ${d.start}–${d.end}${d.lunch ? ' con almuerzo' : ' sin almuerzo'} · ${C.fmtDur(d.paid)} pagadas (solo registro)`; }
+  if (en.code !== 'BASE' && en.calc.descanso) { const d = en.calc.descanso; return `Horario del descanso: ${descText(d)} (${d.start}–${d.end})${d.lunch ? ' con almuerzo' : ' sin almuerzo'} · ${C.fmtDur(d.paid)} pagadas (solo registro)`; }
   return '';
 };
 const noteTitle = en => (noteText(en) ? `title="${esc(noteText(en))}"` : '');
 function cellView(en) {
   if (!en || (!en.code && !en.start && !en.end)) return { cls: '', html: '' };
-  if (en.code && en.code !== 'BASE' && en.calc && en.calc.descanso) { const d = en.calc.descanso; return { cls: 'code c-' + en.code, html: `${esc(C.CODES[en.code])}<small class="perm">${esc(d.start)}–${esc(d.end)}</small><small class="perm">${esc(C.fmtDur(d.paid))} pagadas</small>` }; }
+  if (en.code && en.code !== 'BASE' && en.calc && en.calc.descanso) { const d = en.calc.descanso; return { cls: 'code c-' + en.code, html: `${esc(C.CODES[en.code])}<small class="perm">${esc(descText(d))}</small><small class="perm">${esc(C.fmtDur(d.paid))} pagadas</small>` }; }
   if (en.code) return { cls: 'code c-' + en.code, html: esc(C.CODES[en.code]) };
   if (!en.start || !en.end) return { cls: 'part', html: '…' };
   if (!en.shift) return { cls: 'bad', html: `<div>${en.start}</div><div>${en.end}</div>` };
@@ -595,8 +598,9 @@ async function processCell(empId, date) {
     if (!f) { notices.push('Doble descanso cancelado: no se registró el horario'); await logNotices(); return revert(); }
     const a = C.parseTime(f.start, 's'), b = C.parseTime(f.end, 'e'), lunch = f.lunch === '1';
     const paid = Math.max(0, C.toMin(b) - C.toMin(a) - (lunch ? C.LUNCH : 0));
-    descInfo = { forDate: res.candidate, v: { start: a, end: b, lunch, paid } };
-    notices.push(`Horario del descanso del ${fd(res.candidate)}: ${a}–${b}${lunch ? ' con almuerzo' : ' sin almuerzo'} · ${C.fmtDur(paid)} pagadas (solo registro)`);
+    const sh = S.shifts.find(t => t.start === a && t.end === b) || C.suggestShift(S.shifts, a, b);
+    descInfo = { forDate: res.candidate, v: { start: a, end: b, lunch, paid, shift: sh ? sh.code : null } };
+    notices.push(`Horario del descanso del ${fd(res.candidate)}: ${sh ? sh.code + ' ' : ''}${a}–${b}${lunch ? ' con almuerzo' : ' sin almuerzo'} · ${C.fmtDur(paid)} pagadas (solo registro)`);
   }
 
   /* 5b. Inventario: al formarse la pareja de INV se pregunta la tienda */
@@ -707,7 +711,7 @@ async function showDetail(empId, date) {
   const tipo = C.holidayName(date) ? `Festivo (${esc(C.holidayName(date))})` : C.dow(date) === 0 ? 'Domingo' : 'Día normal';
   let rows, buttons = [{ label: 'Cerrar', value: 'x', cls: 'primary' }];
   if (en.code) {
-    rows = `<b>Código</b><span>${esc(en.code)} · ${esc(C.CODES[en.code])}</span><b>Tipo de día</b><span>${tipo}</span>${en.code === 'BASE' && en.calc && en.calc.nota ? `<b>Novedad</b><span>${esc(en.calc.nota)}</span>` : ''}${en.code && en.code !== 'BASE' && en.calc && en.calc.descanso ? `<b>Horario del descanso</b><span>${esc(en.calc.descanso.start)}–${esc(en.calc.descanso.end)} · ${en.calc.descanso.lunch ? 'con' : 'sin'} almuerzo · ${esc(C.fmtDur(en.calc.descanso.paid))} pagadas (solo registro)</span>` : ''}`;
+    rows = `<b>Código</b><span>${esc(en.code)} · ${esc(C.CODES[en.code])}</span><b>Tipo de día</b><span>${tipo}</span>${en.code === 'BASE' && en.calc && en.calc.nota ? `<b>Novedad</b><span>${esc(en.calc.nota)}</span>` : ''}${en.code && en.code !== 'BASE' && en.calc && en.calc.descanso ? `<b>Horario del descanso</b><span>${esc(descText(en.calc.descanso))} (${esc(en.calc.descanso.start)}–${esc(en.calc.descanso.end)}) · ${en.calc.descanso.lunch ? 'con' : 'sin'} almuerzo · ${esc(C.fmtDur(en.calc.descanso.paid))} pagadas (solo registro)</span>` : ''}`;
   } else if (!en.start || !en.end) {
     rows = `<b>Estado</b><span>Incompleto: falta ${en.start ? 'la salida' : 'la entrada'}</span>`;
   } else {
